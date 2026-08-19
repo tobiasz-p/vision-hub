@@ -2,6 +2,7 @@
 
 $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'vision_hub'
+require_relative 'support/fakes'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
