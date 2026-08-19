@@ -1,0 +1,49 @@
+# VisionHub lint configuration. Runtime code and specs share the same rules
+# except where noted; new cops stay on so upgrades surface modern idioms.
+
+plugins:
+  - rubocop-performance
+  - rubocop-rake
+  - rubocop-rspec
+
+AllCops:
+  TargetRubyVersion: 3.4
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "vendor/**/*"
+    - "**/*.qml"
+
+Style/Documentation:
+  # Every class carries a comment anyway; this cop's boilerplate demands are
+  # stricter than useful here (e.g. it wants docs on tiny exception classes).
+  Enabled: false
+
+Layout/LineLength:
+  Max: 120
+
+Metrics/MethodLength:
+  Max: 25
+  Exclude:
+    - "spec/**/*"
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "Rakefile"
+
+Metrics/AbcSize:
+  Max: 22
+
+Metrics/ParameterLists:
+  # Camera's keyword constructor mirrors cameras.json one-to-one on purpose.
+  Max: 9
+
+RSpec/ExampleLength:
+  Max: 12
+
+RSpec/MultipleExpectations:
+  Max: 6
+
+RSpec/NestedGroups:
+  Max: 4

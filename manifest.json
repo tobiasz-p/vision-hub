@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "tobiasz-p.vision-hub",
+  "name": "VisionHub",
+  "version": "0.1.0",
+  "author": "tobiasz-p",
+  "license": "MIT",
+  "description": "Live view of RTSP IP cameras — health at a glance in the bar, real window with a camera grid and focused view.",
+  "kinds": [
+    "service",
+    "bar-widget",
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "VisionService.qml",
+    "barWidget": "VisionWidget.qml",
+    "panel": "VisionApp.qml"
+  },
+  "barWidget": {
+    "displayName": "VisionHub",
+    "description": "Camera health at a glance; click to open the live view window",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "gridColumns": 3,
+      "targetFps": 5,
+      "subFps": 5,
+      "mainFps": 10,
+      "hwaccel": true,
+      "showOfflineCameras": true,
+      "probeIntervalSec": 10
+    },
+    "schema": [
+      { "key": "gridColumns", "type": "integer", "label": "Grid columns", "min": 1, "max": 6, "step": 1, "defaultValue": 3 },
+      { "key": "targetFps", "type": "integer", "label": "Substream fps (grid tiles)", "min": 1, "max": 15, "step": 1, "defaultValue": 5 },
+      { "key": "mainFps", "type": "integer", "label": "Mainstream fps (focused view)", "min": 1, "max": 30, "step": 1, "defaultValue": 10 },
+      { "key": "hwaccel", "type": "boolean", "label": "Hardware decode (vaapi/auto)", "defaultValue": true },
+      { "key": "showOfflineCameras", "type": "boolean", "label": "Show offline cameras in the grid", "defaultValue": true }
+    ]
+  }
+}
