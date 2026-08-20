@@ -25,14 +25,18 @@ module VisionHub
     end
 
     # The stored password for +camera_id+, or nil when the keyring has no
-    # entry (or the lookup fails). Positive and negative results are cached:
-    # reconnecting cameras must not hammer the keyring.
+    # entry (or the lookup fails). Positive results are cached: reconnecting
+    # cameras must not hammer the keyring. Misses are deliberately NOT cached,
+    # so an entry added later is picked up by the next unconfigured-retry
+    # without a daemon restart.
     def lookup(camera_id)
-      return @cache[camera_id] if @cache.key?(camera_id)
+      cached = @cache[camera_id]
+      return cached unless cached.nil?
 
       ok, stdout = @runner.call(lookup_argv(camera_id))
       value = ok && !stdout.strip.empty? ? stdout.strip : nil
-      @cache[camera_id] = value
+      @cache[camera_id] = value unless value.nil?
+      value
     end
 
     def configured?(camera_id)

@@ -84,7 +84,7 @@ Item {
 
   // ---- commands toward the daemon ---------------------------------------------
   function send(payload) {
-    if (!daemonProc.running || !root._ready) return false
+    if (!daemonProc || !daemonProc.running || !root._ready) return false
     daemonProc.write(JSON.stringify(payload) + "\n")
     return true
   }
@@ -118,13 +118,16 @@ Item {
   }
 
   function startDaemon() {
-    if (!root.configPath || root.daemonProc.running) return
+    if (!root.configPath) return
+    if (!daemonProc) return
+    if (daemonProc.running) return
     root.daemonError = ""
-    root.daemonProc.command = root.daemonArguments()
-    root.daemonProc.running = true
+    daemonProc.command = root.daemonArguments()
+    daemonProc.running = true
   }
 
   function stopDaemon() {
+    if (!daemonProc) return
     if (daemonProc.running) daemonProc.running = false
   }
 

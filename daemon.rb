@@ -11,6 +11,12 @@
 require 'optparse'
 require_relative 'lib/vision_hub'
 
+$stdout.sync = true
+$stderr.sync = true
+
+trap('INT') { exit }
+trap('TERM') { exit }
+
 options = {
   fps: 5,
   main_fps: 15,

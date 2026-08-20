@@ -33,14 +33,19 @@ RSpec.describe VisionHub::SecretStore do
     expect(store.lookup('front')).to be_nil
   end
 
-  it 'caches both hits and misses across repeated lookups' do
+  it 'caches hits but re-asks misses so later keyring entries are found' do
     lookup_result.replace([true, 'pw', ''])
-    store.lookup('front')
+    expect(store.lookup('front')).to eq('pw')
 
     lookup_result.replace([false, '', ''])
-    expect(store.lookup('front')).to eq('pw')
+    expect(store.lookup('front')).to eq('pw') # cached hit, no new call
     expect(store.lookup('garage')).to be_nil
     expect(calls.size).to eq(2)
+
+    # The user adds the missing entry; the next retry must see it.
+    lookup_result.replace([true, 'late', ''])
+    expect(store.lookup('garage')).to eq('late')
+    expect(calls.size).to eq(3)
   end
 
   it 're-queries after clear_cache!' do
