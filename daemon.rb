@@ -34,11 +34,12 @@ parser.parse(ARGV)
 abort('missing --config') unless options[:config]
 abort('missing --runtime-dir') unless options[:runtime_dir]
 
+# A broken or missing cameras.json is a setup state, not a crash: the daemon
+# stays alive, reports the problem once, and answers commands so the UI can
+# show instructions. The user fixes the file and hits refresh (or the widget
+# restarts us via settings changes).
 config = VisionHub::Configuration.load(options[:config])
-unless config.ok?
-  warn "vision-hub: config error: #{config.error}"
-  exit 65
-end
+warn "vision-hub: config error: #{config.error}" unless config.ok?
 
 # Minimal stderr JSON-lines logger; :debug is compiled out so the pipe to the
 # shell never carries chatter.
@@ -73,6 +74,10 @@ end
 begin
   supervisor.start(now: VisionHub::Clock.now)
   flush_events(supervisor)
+  unless config.ok?
+    $stdout.write(VisionHub::Ipc.encode(event: :config_error, message: config.error))
+    $stdout.flush
+  end
 
   loop do
     if $stdin.wait_readable(0.25)
