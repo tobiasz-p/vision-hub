@@ -104,8 +104,12 @@ module VisionHub
       argv = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning']
       argv += ['-hwaccel', 'auto'] if @hwaccel
       argv += input_argv(url)
-      argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps}", '-q:v', '4', '-update', '1',
-              '-y', frame_path]
+      if @role == :sub
+        argv + ['-an', '-sn', '-dn', '-vf', 'scale=640:-1', '-frames:v', '1', '-q:v', '6', '-y', frame_path]
+      else
+        argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1280:-1", '-q:v', '6', '-update', '1',
+                '-y', frame_path]
+      end
     end
 
     private
@@ -197,6 +201,10 @@ module VisionHub
       log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? 'stopped' : 'died'})")
       if intentional
         finish_intentional(exit_code, now)
+      elsif @role == :sub && exit_code.zero?
+        close_child
+        @status = :stopped
+        emit(event: :exited, code: exit_code, intentional: true, error: nil)
       else
         finish_crashed(exit_code, now)
       end

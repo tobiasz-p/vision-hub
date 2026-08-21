@@ -147,14 +147,17 @@ module VisionHub
     end
 
     def refresh_all
-      @cameras.each do |camera|
-        result = @probe_runner.call(camera)
-        was_online = @states[camera.id][:online]
-        @states[camera.id][:online] = result == :online
-        @probe_due[camera.id] = @now + @probe_interval
-        publish_changes if was_online != @states[camera.id][:online]
-      end
+      @cameras.each { |camera| refresh_camera(camera) }
       publish_changes
+    end
+
+    def refresh_camera(camera)
+      result = @probe_runner.call(camera)
+      was_online = @states[camera.id][:online]
+      @states[camera.id][:online] = result == :online
+      @probe_due[camera.id] = @now + @probe_interval
+      publish_changes if was_online != @states[camera.id][:online]
+      @pumps.dig(camera.id, :sub)&.start(now: @now) if result == :online
     end
 
     # ---- focus ----

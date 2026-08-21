@@ -86,12 +86,22 @@ RSpec.describe VisionHub::FramePump do
       expect(argv).not_to include('-f')
     end
 
-    it 'targets one shared JPEG per camera with fps limiting and overwrite mode' do
+    it 'targets one shared JPEG per camera with snapshot mode for sub role' do
       argv = pump.build_argv('rtsp://u:p@h/s')
 
       expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
+      expect(argv).to include('-frames:v', '1', '-y')
+      expect(argv[argv.index('-vf') + 1]).to eq('scale=640:-1')
+      expect(argv).to include('-hwaccel', 'auto')
+    end
+
+    it 'targets continuous streaming for main role' do
+      main_pump = build_pump(role: :main, fps: 10, hwaccel: true, input_strategy: :argv, secrets: secrets)
+      argv = main_pump.build_argv('rtsp://u:p@h/s')
+
+      expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
       expect(argv).to include('-update', '1', '-y')
-      expect(argv[argv.index('-vf') + 1]).to eq('fps=5')
+      expect(argv[argv.index('-vf') + 1]).to eq('fps=10,scale=1280:-1')
       expect(argv).to include('-hwaccel', 'auto')
     end
 

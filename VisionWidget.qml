@@ -7,9 +7,7 @@ import qs.Ui
 //
 // Shows one glyph plus an "n/m" online counter when cameras are configured.
 // Left click opens the live-view window; right click asks the daemon to
-// re-probe everything now. The widget owns the settings schema: it resolves
-// shell.json overrides against manifest defaults and pushes the resolved
-// daemon knobs into the service, so both sides always agree.
+// re-probe everything now; middle click force refreshes.
 BarWidget {
   id: root
   moduleName: "tobiasz-p.vision-hub"
@@ -85,6 +83,10 @@ BarWidget {
         else if (root.bar && root.bar.shell) root.bar.shell.toggle("tobiasz-p.vision-hub", "{}")
         return
       }
+      if (mouseButton === Qt.MiddleButton) {
+        if (root.visionService) root.visionService.refresh()
+        return
+      }
       if (root.bar && root.bar.shell) {
         root.bar.shell.toggle("tobiasz-p.vision-hub", JSON.stringify({ columns: root.gridColumns }))
       }
@@ -101,16 +103,16 @@ BarWidget {
     var service = root.visionService
     for (var id in root.states) {
       var state = root.states[id]
-      var mark = state.online === true ? "" : (state.online === null ? "?" : "")
+      var mark = state.online === true ? "●" : (state.online === false ? "✕" : "○")
       var line = mark + " " + id
-      if (state.error) line += " — " + state.error
-      else if (state.online === false) line += " — offline"
-      else if (state.streaming) line += " — live"
+      if (state.error) line += " (" + state.error + ")"
+      else if (state.online === false) line += " (offline)"
+      else if (state.streaming) line += " (live)"
       lines.push(line)
     }
     if (service && service.configError !== "") lines.push("Config: " + service.configError)
     if (service && service.daemonError !== "") lines.push(service.daemonError)
-    lines.push("Click: open · Right-click: re-probe")
+    lines.push("Left-click: open grid · Right-click: re-probe")
     return lines.join("\n")
   }
 }
