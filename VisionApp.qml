@@ -3,11 +3,8 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 
-// VisionHub live-view window: a multi-camera grid plus focused single-camera view.
-//
-// Frames come from the daemon's continuously-overwritten JPEGs on tmpfs;
-// each tile uses double-buffering to eliminate any flicker, and preserves
-// the camera's native aspect ratio.
+// VisionHub modern surveillance live-view window:
+// Next-gen multi-camera grid and cinema single-camera live view.
 Item {
   id: root
 
@@ -21,11 +18,23 @@ Item {
   property bool closingFromHost: false
   property string focusedId: ""
   property int columns: 3
+  property bool patrolMode: false
 
   readonly property string pluginId: manifest ? manifest.id : "tobiasz-p.vision-hub"
-  readonly property var visionService: service
+  readonly property var visionService: service || (shell && typeof shell.serviceFor === "function" ? shell.serviceFor(root.pluginId) : null)
 
   readonly property var cameraList: visionService ? visionService.cameraIds : []
+  readonly property int totalCount: cameraList.length
+  readonly property int onlineCount: {
+    var count = 0
+    if (!visionService) return 0
+    for (var i = 0; i < cameraList.length; i++) {
+      var st = visionService.stateFor(cameraList[i])
+      if (st && st.online === true) count += 1
+    }
+    return count
+  }
+
   readonly property int currentCameraIndex: {
     if (focusedId === "" || cameraList.length === 0) return -1
     for (var i = 0; i < cameraList.length; i++) {
@@ -53,6 +62,7 @@ Item {
 
   function close() {
     root.showGrid()
+    root.patrolMode = false
     closingFromHost = true
     window.visible = false
   }
@@ -65,11 +75,16 @@ Item {
   function showFocused(cameraId) {
     if (!cameraId) return
     root.focusedId = cameraId
-    if (root.visionService) root.visionService.focus(cameraId)
+    if (root.visionService && typeof root.visionService.focusCamera === "function") {
+      root.visionService.focusCamera(cameraId)
+    }
   }
 
   function showGrid() {
-    if (root.focusedId !== "" && root.visionService) root.visionService.unfocus()
+    root.patrolMode = false
+    if (root.focusedId !== "" && root.visionService && typeof root.visionService.unfocusCamera === "function") {
+      root.visionService.unfocusCamera()
+    }
     root.focusedId = ""
   }
 
@@ -87,15 +102,23 @@ Item {
     showFocused(cameraList[prevIdx])
   }
 
+  // Patrol / Auto-Cycle Timer (cycles cameras every 6s in focused mode)
+  Timer {
+    interval: 6000
+    repeat: true
+    running: window.visible && root.patrolMode && root.focusedId !== "" && root.cameraList.length > 1
+    onTriggered: root.showNextCamera()
+  }
+
   // ---- window -----------------------------------------------------------------
   FloatingWindow {
     id: window
 
     title: "VisionHub" + (root.focusedId !== "" ? " — " + root.focusedId : "")
-    color: Color.background
-    implicitWidth: 1040
-    implicitHeight: 700
-    minimumSize: Qt.size(580, 420)
+    color: "#090b10"
+    implicitWidth: 1120
+    implicitHeight: 740
+    minimumSize: Qt.size(680, 480)
 
     onVisibleChanged: {
       if (!visible && !root.closingFromHost) {
@@ -115,175 +138,446 @@ Item {
         else root.requestClose()
       }
 
-      // ---- Window Header Bar ----------------------------------------------
+      Keys.onLeftPressed: {
+        if (root.focusedId !== "") root.showPrevCamera()
+      }
+
+      Keys.onRightPressed: {
+        if (root.focusedId !== "") root.showNextCamera()
+      }
+
+      Keys.onSpacePressed: {
+        if (root.focusedId !== "") root.patrolMode = !root.patrolMode
+      }
+
+      Keys.onDigit1Pressed: if (root.cameraList.length >= 1) root.showFocused(root.cameraList[0])
+      Keys.onDigit2Pressed: if (root.cameraList.length >= 2) root.showFocused(root.cameraList[1])
+      Keys.onDigit3Pressed: if (root.cameraList.length >= 3) root.showFocused(root.cameraList[2])
+      Keys.onDigit4Pressed: if (root.cameraList.length >= 4) root.showFocused(root.cameraList[3])
+      Keys.onDigit5Pressed: if (root.cameraList.length >= 5) root.showFocused(root.cameraList[4])
+
+      // ---- Modern Glass Header Bar ----------------------------------------
       Rectangle {
         id: headerBar
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 52
-        color: Qt.rgba(Color.surface.r, Color.surface.g, Color.surface.b, 0.4)
+        height: 56
+        color: Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.92)
         border.width: 1
-        border.color: Color.border
-        z: 10
+        border.color: Qt.rgba(255, 255, 255, 0.08)
+        z: 30
 
-        // Left Header Section
+        // Subtle gradient hairline highlight at the top
+        Rectangle {
+          anchors.top: parent.top
+          anchors.left: parent.left
+          anchors.right: parent.right
+          height: 1
+          color: Qt.rgba(255, 255, 255, 0.12)
+        }
+
+        // Left Header Section (Brand & Status)
         Row {
           anchors.left: parent.left
-          anchors.leftMargin: Style.space(12)
+          anchors.leftMargin: Style.space(16)
           anchors.verticalCenter: parent.verticalCenter
-          spacing: Style.space(10)
+          spacing: Style.space(12)
 
-          // Grid / Back Button
-          WidgetButton {
-            visible: root.focusedId !== ""
-            bar: null
-            text: "← Grid"
-            onPressed: function(mouseButton) {
-              root.showGrid()
+          // Brand Glyph Box
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 36
+            height: 36
+            radius: 10
+            color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.14)
+            border.width: 1
+            border.color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.35)
+
+            Text {
+              anchors.centerIn: parent
+              text: "󰹗"
+              font.pixelSize: 18
+              color: "#38bdf8"
             }
           }
 
-          // App / View Title
-          Row {
+          // Brand Title & Info
+          Column {
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(8)
+            spacing: 1
 
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: root.focusedId !== "" ? root.focusedId : "VisionHub"
-              font.pixelSize: Style.font.body
-              font.bold: true
-              color: Color.foreground
+            Row {
+              spacing: 4
+              Text {
+                text: "VISION"
+                font.pixelSize: 13
+                font.bold: true
+                font.letterSpacing: 1.2
+                color: "#f1f5f9"
+              }
+              Text {
+                text: "HUB"
+                font.pixelSize: 13
+                font.bold: true
+                font.letterSpacing: 1.2
+                color: "#38bdf8"
+              }
             }
 
-            // Live Status Pill
-            Rectangle {
-              anchors.verticalCenter: parent.verticalCenter
-              height: 22
-              width: statusRow.implicitWidth + Style.space(12)
-              radius: Style.cornerRadius
-              color: Qt.rgba(0, 0, 0, 0.4)
-              border.width: 1
-              border.color: {
-                if (root.visionService && root.visionService.configError !== "") return Color.urgent
-                return Color.border
+            Text {
+              text: root.focusedId !== "" ? "STREAM · " + root.focusedId.toUpperCase() : root.onlineCount + "/" + root.totalCount + " CAMERAS ONLINE"
+              font.pixelSize: 10
+              font.bold: true
+              font.letterSpacing: 0.5
+              color: "#94a3b8"
+            }
+          }
+
+          // Live / Status Capsule
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            height: 24
+            width: liveRow.implicitWidth + 16
+            radius: 12
+            color: {
+              if (root.focusedId !== "") return Qt.rgba(16 / 255, 185 / 255, 129 / 255, 0.18)
+              return root.onlineCount === root.totalCount ? Qt.rgba(16 / 255, 185 / 255, 129 / 255, 0.14) : Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.18)
+            }
+            border.width: 1
+            border.color: {
+              if (root.focusedId !== "") return "#10b981"
+              return root.onlineCount === root.totalCount ? "#10b981" : "#f43f5e"
+            }
+
+            Row {
+              id: liveRow
+              anchors.centerIn: parent
+              spacing: 6
+
+              // Pulsing Live Indicator Dot
+              Rectangle {
+                id: liveDot
+                anchors.verticalCenter: parent.verticalCenter
+                width: 7
+                height: 7
+                radius: 3.5
+                color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#10b981" : "#f43f5e"
+
+                SequentialAnimation on opacity {
+                  running: true
+                  loops: Animation.Infinite
+                  NumberAnimation { to: 0.3; duration: 900; easing.type: Easing.InOutQuad }
+                  NumberAnimation { to: 1.0; duration: 900; easing.type: Easing.InOutQuad }
+                }
               }
 
-              Row {
-                id: statusRow
-                anchors.centerIn: parent
-                spacing: Style.space(5)
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: {
+                  if (root.focusedId !== "") return root.patrolMode ? "PATROL · 10 FPS" : "LIVE 10 FPS"
+                  return root.onlineCount === root.totalCount ? "ALL HEALTHY" : (root.totalCount - root.onlineCount) + " OFFLINE"
+                }
+                font.pixelSize: 10
+                font.bold: true
+                font.letterSpacing: 0.4
+                color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#34d399" : "#fda4af"
+              }
+            }
+          }
+        }
 
-                Rectangle {
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: 8
-                  height: 8
-                  radius: 4
-                  color: {
-                    if (root.focusedId !== "") {
-                      var st = root.visionService ? root.visionService.stateFor(root.focusedId) : null
-                      return st && st.online ? Color.accent : Color.urgent
-                    }
-                    return Color.accent
+        // Center Section: View Mode & Camera Pills
+        Row {
+          anchors.centerIn: parent
+          spacing: 8
+
+          // Grid vs Focus Segmented Switcher
+          Rectangle {
+            height: 34
+            width: segRow.implicitWidth + 6
+            radius: 17
+            color: Qt.rgba(255, 255, 255, 0.05)
+            border.width: 1
+            border.color: Qt.rgba(255, 255, 255, 0.1)
+
+            Row {
+              id: segRow
+              anchors.centerIn: parent
+              spacing: 3
+
+              // Grid Tab
+              Rectangle {
+                width: 76
+                height: 28
+                radius: 14
+                color: root.focusedId === "" ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.22) : (gridTabHover.containsMouse ? Qt.rgba(255, 255, 255, 0.08) : "transparent")
+                border.width: root.focusedId === "" ? 1 : 0
+                border.color: "#38bdf8"
+
+                Row {
+                  anchors.centerIn: parent
+                  spacing: 5
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "󰕰"
+                    font.pixelSize: 12
+                    color: root.focusedId === "" ? "#38bdf8" : "#94a3b8"
+                  }
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Grid"
+                    font.pixelSize: 11
+                    font.bold: root.focusedId === ""
+                    color: root.focusedId === "" ? "#f1f5f9" : "#94a3b8"
                   }
                 }
 
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: {
-                    if (root.focusedId !== "") return "MAIN STREAM"
-                    var total = root.cameraList.length
-                    return total + " Camera" + (total === 1 ? "" : "s")
+                MouseArea {
+                  id: gridTabHover
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.showGrid()
+                }
+              }
+
+              // Focus Tab
+              Rectangle {
+                width: 84
+                height: 28
+                radius: 14
+                color: root.focusedId !== "" ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.22) : (focusTabHover.containsMouse ? Qt.rgba(255, 255, 255, 0.08) : "transparent")
+                border.width: root.focusedId !== "" ? 1 : 0
+                border.color: "#38bdf8"
+
+                Row {
+                  anchors.centerIn: parent
+                  spacing: 5
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "󰍉"
+                    font.pixelSize: 12
+                    color: root.focusedId !== "" ? "#38bdf8" : "#94a3b8"
                   }
-                  font.pixelSize: Style.font.caption
-                  color: Color.foreground
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Cinema"
+                    font.pixelSize: 11
+                    font.bold: root.focusedId !== ""
+                    color: root.focusedId !== "" ? "#f1f5f9" : "#94a3b8"
+                  }
+                }
+
+                MouseArea {
+                  id: focusTabHover
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (root.focusedId === "" && root.cameraList.length > 0) {
+                      root.showFocused(root.cameraList[0])
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Header Camera Quick Selectors (in focused mode)
+          Row {
+            visible: root.focusedId !== "" && root.totalCount > 1
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+
+            Repeater {
+              model: root.cameraList
+              delegate: Rectangle {
+                required property string modelData
+                readonly property bool isCur: root.focusedId === modelData
+                width: 48
+                height: 28
+                radius: 14
+                color: isCur ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.25) : (tabCamHover.containsMouse ? Qt.rgba(255, 255, 255, 0.1) : Qt.rgba(255, 255, 255, 0.04))
+                border.width: isCur ? 1 : 1
+                border.color: isCur ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.1)
+
+                Text {
+                  anchors.centerIn: parent
+                  text: parent.modelData
+                  font.pixelSize: 11
+                  font.bold: parent.isCur
+                  color: parent.isCur ? "#38bdf8" : "#94a3b8"
+                }
+
+                MouseArea {
+                  id: tabCamHover
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.showFocused(parent.modelData)
                 }
               }
             }
           }
         }
 
-        // Right Header Section (Tools & Layouts)
+        // Right Header Section (Tools & Actions)
         Row {
           anchors.right: parent.right
-          anchors.rightMargin: Style.space(12)
+          anchors.rightMargin: Style.space(16)
           anchors.verticalCenter: parent.verticalCenter
-          spacing: Style.space(8)
+          spacing: 8
 
-          // Column selector (only in grid view)
-          Row {
-            visible: root.focusedId === "" && root.cameraList.length > 1
+          // Grid Column density selector
+          Rectangle {
+            visible: root.focusedId === "" && root.totalCount > 1
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(4)
+            height: 32
+            width: colBoxRow.implicitWidth + 6
+            radius: 16
+            color: Qt.rgba(255, 255, 255, 0.05)
+            border.width: 1
+            border.color: Qt.rgba(255, 255, 255, 0.1)
 
-            Repeater {
-              model: [1, 2, 3, 4]
-              delegate: Rectangle {
-                required property int modelData
-                width: 28
-                height: 28
-                radius: Style.cornerRadius
-                color: root.columns === modelData ? Color.accent : Qt.rgba(Color.surface.r, Color.surface.g, Color.surface.b, 0.5)
-                border.width: 1
-                border.color: root.columns === modelData ? Color.accent : Color.border
+            Row {
+              id: colBoxRow
+              anchors.centerIn: parent
+              spacing: 2
 
-                Text {
-                  anchors.centerIn: parent
-                  text: parent.modelData
-                  font.pixelSize: Style.font.caption
-                  font.bold: root.columns === parent.modelData
-                  color: root.columns === parent.modelData ? Color.background : Color.foreground
-                }
+              Repeater {
+                model: [1, 2, 3, 4]
+                delegate: Rectangle {
+                  required property int modelData
+                  width: 28
+                  height: 26
+                  radius: 13
+                  color: root.columns === modelData ? "#38bdf8" : (cHover.containsMouse ? Qt.rgba(255, 255, 255, 0.1) : "transparent")
 
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: function(mouse) {
-                    root.columns = parent.modelData
+                  Text {
+                    anchors.centerIn: parent
+                    text: parent.modelData + "×"
+                    font.pixelSize: 10
+                    font.bold: root.columns === parent.modelData
+                    color: root.columns === parent.modelData ? "#090b10" : "#cbd5e1"
+                  }
+
+                  MouseArea {
+                    id: cHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.columns = parent.modelData
                   }
                 }
               }
             }
           }
 
-          // Carousel Navigation (focused view)
-          Row {
-            visible: root.focusedId !== "" && root.cameraList.length > 1
+          // Patrol Mode Toggle (in focused view)
+          Rectangle {
+            visible: root.focusedId !== "" && root.totalCount > 1
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(4)
+            height: 32
+            width: patrolRow.implicitWidth + 18
+            radius: 16
+            color: root.patrolMode ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.25) : (patrolHover.containsMouse ? Qt.rgba(255, 255, 255, 0.1) : Qt.rgba(255, 255, 255, 0.05))
+            border.width: 1
+            border.color: root.patrolMode ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.1)
 
-            WidgetButton {
-              bar: null
-              text: "‹ Prev"
-              onPressed: function(mouseButton) {
-                root.showPrevCamera()
+            Row {
+              id: patrolRow
+              anchors.centerIn: parent
+              spacing: 6
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰑖"
+                font.pixelSize: 12
+                color: root.patrolMode ? "#38bdf8" : "#94a3b8"
+              }
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Patrol"
+                font.pixelSize: 11
+                font.bold: root.patrolMode
+                color: root.patrolMode ? "#f1f5f9" : "#cbd5e1"
               }
             }
 
-            WidgetButton {
-              bar: null
-              text: "Next ›"
-              onPressed: function(mouseButton) {
-                root.showNextCamera()
-              }
+            MouseArea {
+              id: patrolHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.patrolMode = !root.patrolMode
             }
           }
 
           // Refresh Button
-          WidgetButton {
-            bar: null
-            text: "󰑐 Refresh"
-            onPressed: function(mouseButton) {
-              if (root.visionService) root.visionService.refresh()
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            height: 32
+            width: refreshBtnRow.implicitWidth + 18
+            radius: 16
+            color: refreshHover.containsMouse ? Qt.rgba(255, 255, 255, 0.12) : Qt.rgba(255, 255, 255, 0.05)
+            border.width: 1
+            border.color: Qt.rgba(255, 255, 255, 0.1)
+
+            Row {
+              id: refreshBtnRow
+              anchors.centerIn: parent
+              spacing: 6
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰑐"
+                font.pixelSize: 12
+                color: "#38bdf8"
+              }
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Refresh"
+                font.pixelSize: 11
+                font.bold: true
+                color: "#e2e8f0"
+              }
+            }
+
+            MouseArea {
+              id: refreshHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                if (root.visionService) root.visionService.refresh()
+              }
             }
           }
 
           // Close Button
-          WidgetButton {
-            bar: null
-            text: "✕"
-            onPressed: function(mouseButton) {
-              root.requestClose()
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 32
+            height: 32
+            radius: 16
+            color: closeHover.containsMouse ? Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.25) : Qt.rgba(255, 255, 255, 0.05)
+            border.width: 1
+            border.color: closeHover.containsMouse ? "#f43f5e" : Qt.rgba(255, 255, 255, 0.1)
+
+            Text {
+              anchors.centerIn: parent
+              text: "✕"
+              font.pixelSize: 12
+              color: closeHover.containsMouse ? "#f43f5e" : "#94a3b8"
+            }
+
+            MouseArea {
+              id: closeHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.requestClose()
             }
           }
         }
@@ -296,7 +590,7 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
 
-        // ---- focused single-camera view -------------------------------------
+        // ---- Cinema Focused Single-Camera Live View ------------------------
         Loader {
           id: focusedLoader
           anchors.fill: parent
@@ -306,69 +600,202 @@ Item {
             Item {
               anchors.fill: parent
 
+              // Deep surveillance cinema canvas
+              Rectangle {
+                anchors.fill: parent
+                color: "#06070a"
+              }
+
+              // Live Frame Display
               FrameImage {
                 id: focusedFrame
                 anchors.fill: parent
-                anchors.margins: Style.space(8)
+                anchors.margins: Style.space(16)
+                anchors.bottomMargin: Style.space(88)
                 cameraId: root.focusedId
                 fps: root.visionService ? root.visionService.mainFps : 10
                 baseUrl: root.visionService ? root.visionService.frameUrl(root.focusedId) : ""
                 state: root.visionService ? root.visionService.stateFor(root.focusedId) : null
               }
 
-              // Floating Carousel Arrows on Sides
+              // Top-Left Stream HUD Badge
+              Rectangle {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.margins: Style.space(24)
+                height: 30
+                width: streamHudRow.implicitWidth + 20
+                radius: 15
+                color: Qt.rgba(10 / 255, 13 / 255, 18 / 255, 0.85)
+                border.width: 1
+                border.color: Qt.rgba(255, 255, 255, 0.15)
+                z: 15
+
+                Row {
+                  id: streamHudRow
+                  anchors.centerIn: parent
+                  spacing: 8
+
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 7
+                    height: 7
+                    radius: 3.5
+                    color: "#10b981"
+                  }
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.focusedId.toUpperCase() + " · 1080P HEVC"
+                    font.pixelSize: 11
+                    font.bold: true
+                    font.letterSpacing: 0.5
+                    color: "#f1f5f9"
+                  }
+
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 12
+                    width: 1
+                    color: Qt.rgba(255, 255, 255, 0.2)
+                  }
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "HW-ACCEL"
+                    font.pixelSize: 10
+                    font.bold: true
+                    color: "#38bdf8"
+                  }
+                }
+              }
+
+              // Side Chevrons (Floating Glass Navigation)
               Rectangle {
                 anchors.left: parent.left
-                anchors.leftMargin: Style.space(12)
+                anchors.leftMargin: Style.space(20)
                 anchors.verticalCenter: parent.verticalCenter
-                width: 44
-                height: 44
-                radius: 22
-                color: prevHover.containsMouse ? Qt.rgba(0, 0, 0, 0.75) : Qt.rgba(0, 0, 0, 0.45)
-                visible: root.cameraList.length > 1
+                anchors.verticalCenterOffset: -Style.space(40)
+                width: 48
+                height: 48
+                radius: 24
+                color: prevHover.containsMouse ? Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.95) : Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.65)
+                border.width: 1.5
+                border.color: prevHover.containsMouse ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.15)
+                visible: root.totalCount > 1
+                z: 20
 
                 Text {
                   anchors.centerIn: parent
                   text: "‹"
-                  font.pixelSize: Style.font.heading
+                  font.pixelSize: 24
                   font.bold: true
-                  color: "#ffffff"
+                  color: prevHover.containsMouse ? "#38bdf8" : "#f1f5f9"
                 }
 
                 MouseArea {
                   id: prevHover
                   anchors.fill: parent
                   hoverEnabled: true
-                  onClicked: function(mouse) {
-                    root.showPrevCamera()
-                  }
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.showPrevCamera()
                 }
               }
 
               Rectangle {
                 anchors.right: parent.right
-                anchors.rightMargin: Style.space(12)
+                anchors.rightMargin: Style.space(20)
                 anchors.verticalCenter: parent.verticalCenter
-                width: 44
-                height: 44
-                radius: 22
-                color: nextHover.containsMouse ? Qt.rgba(0, 0, 0, 0.75) : Qt.rgba(0, 0, 0, 0.45)
-                visible: root.cameraList.length > 1
+                anchors.verticalCenterOffset: -Style.space(40)
+                width: 48
+                height: 48
+                radius: 24
+                color: nextHover.containsMouse ? Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.95) : Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.65)
+                border.width: 1.5
+                border.color: nextHover.containsMouse ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.15)
+                visible: root.totalCount > 1
+                z: 20
 
                 Text {
                   anchors.centerIn: parent
                   text: "›"
-                  font.pixelSize: Style.font.heading
+                  font.pixelSize: 24
                   font.bold: true
-                  color: "#ffffff"
+                  color: nextHover.containsMouse ? "#38bdf8" : "#f1f5f9"
                 }
 
                 MouseArea {
                   id: nextHover
                   anchors.fill: parent
                   hoverEnabled: true
-                  onClicked: function(mouse) {
-                    root.showNextCamera()
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.showNextCamera()
+                }
+              }
+
+              // Floating Bottom Camera Strip Dock (Glassmorphism Pill)
+              Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Style.space(18)
+                height: 52
+                width: thumbRow.implicitWidth + 24
+                radius: 26
+                color: Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.9)
+                border.width: 1
+                border.color: Qt.rgba(255, 255, 255, 0.15)
+                z: 20
+
+                Row {
+                  id: thumbRow
+                  anchors.centerIn: parent
+                  spacing: 8
+
+                  Repeater {
+                    model: root.cameraList
+                    delegate: Rectangle {
+                      id: cameraThumbItem
+                      required property string modelData
+                      readonly property bool isSelected: root.focusedId === modelData
+                      width: capsuleRow.implicitWidth + 20
+                      height: 36
+                      radius: 18
+
+                      color: isSelected ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.22) : (thumbHover.containsMouse ? Qt.rgba(255, 255, 255, 0.12) : Qt.rgba(255, 255, 255, 0.05))
+                      border.width: isSelected ? 2 : 1
+                      border.color: isSelected ? "#38bdf8" : (thumbHover.containsMouse ? Qt.rgba(255, 255, 255, 0.3) : Qt.rgba(255, 255, 255, 0.1))
+
+                      Row {
+                        id: capsuleRow
+                        anchors.centerIn: parent
+                        spacing: 7
+
+                        Rectangle {
+                          anchors.verticalCenter: parent.verticalCenter
+                          width: 7
+                          height: 7
+                          radius: 3.5
+                          color: cameraThumbItem.isSelected ? "#38bdf8" : "#64748b"
+                        }
+
+                        Text {
+                          anchors.verticalCenter: parent.verticalCenter
+                          text: cameraThumbItem.modelData.toUpperCase()
+                          font.pixelSize: 11
+                          font.bold: true
+                          font.letterSpacing: 0.5
+                          color: cameraThumbItem.isSelected ? "#38bdf8" : "#e2e8f0"
+                        }
+                      }
+
+                      MouseArea {
+                        id: thumbHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.showFocused(parent.modelData)
+                      }
+                    }
                   }
                 }
               }
@@ -376,12 +803,12 @@ Item {
           }
         }
 
-        // ---- grid --------------------------------------------------------------
+        // ---- Modern Multi-Camera Grid View ---------------------------------
         GridView {
           id: grid
           anchors.fill: parent
-          anchors.margins: Style.space(8)
-          visible: root.focusedId === "" && root.cameraList.length > 0
+          anchors.margins: Style.space(14)
+          visible: root.focusedId === "" && root.totalCount > 0
           clip: true
           cellWidth: Math.floor(width / Math.max(1, root.columns))
           cellHeight: Math.floor(cellWidth * 9 / 16)
@@ -397,7 +824,7 @@ Item {
 
             CameraTile {
               anchors.fill: parent
-              anchors.margins: Style.space(4)
+              anchors.margins: Style.space(6)
               cameraId: delegateRoot.modelData
               fps: 0
               baseUrl: root.visionService ? root.visionService.frameUrl(delegateRoot.modelData) : ""
@@ -413,43 +840,47 @@ Item {
         // Empty state: no daemon state yet or no cameras configured.
         Column {
           anchors.centerIn: parent
-          visible: root.focusedId === "" && (root.visionService === null || root.cameraList.length === 0)
-          spacing: Style.space(12)
+          visible: root.focusedId === "" && (root.visionService === null || root.totalCount === 0)
+          spacing: 16
 
           Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 56
-            height: 56
-            radius: 28
-            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
+            width: 72
+            height: 72
+            radius: 36
+            color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.15)
+            border.width: 1
+            border.color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.3)
 
             Text {
               anchors.centerIn: parent
               text: "󰹗"
-              font.pixelSize: Style.font.heading
-              color: Color.accent
+              font.pixelSize: 32
+              color: "#38bdf8"
             }
           }
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: {
-              if (!root.visionService || !root.visionService.sessionReady)
-                return "Connecting to vision-hub daemon…"
-              if (root.visionService.configError !== "")
-                return "Config Error: " + root.visionService.configError
-              return "No cameras configured"
+              if (root.visionService && root.visionService.configError !== "") {
+                return root.visionService.configError
+              }
+              if (root.visionService && root.visionService.daemonError !== "") {
+                return root.visionService.daemonError
+              }
+              return "No Cameras Configured"
             }
-            color: Color.foreground
-            font.pixelSize: Style.font.body
+            color: "#f1f5f9"
+            font.pixelSize: 18
             font.bold: true
           }
 
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "Create ~/.config/vision-hub/cameras.json and store credentials in keyring"
-            color: Color.muted
-            font.pixelSize: Style.font.caption
+            text: "Create ~/.config/vision-hub/cameras.json and store credentials in gnome-keyring"
+            color: "#94a3b8"
+            font.pixelSize: 13
           }
         }
       }
@@ -458,28 +889,34 @@ Item {
 
   // ---- components ---------------------------------------------------------------
 
-  // Double-buffered frame loader: ping-pongs between two Image elements to
-  // eliminate any blank-frame flicker during asynchronous JPEG decoding.
+  // Double-buffered frame loader: ping-pongs between two Image elements with Z-index
+  // to eliminate any blank-frame flicker during asynchronous JPEG decoding.
   // Preserves camera aspect ratio without cropping (PreserveAspectFit).
   component FrameImage: Item {
     id: frame
 
     property string cameraId: ""
-    property int fps: 5
+    property int fps: 0
     property string baseUrl: ""
     property var state: null
     property int tick: 0
-    property int activeIndex: 0
+    property bool frontIsA: true
     readonly property bool hasFrame: imgA.status === Image.Ready || imgB.status === Image.Ready
 
     function bump() {
       if (baseUrl === "") return
       frame.tick += 1
       var nextUrl = baseUrl + "?t=" + frame.tick
-      if (frame.activeIndex === 0) {
+      if (frame.frontIsA) {
         imgB.source = nextUrl
+        imgB.z = 2
+        imgA.z = 1
+        frame.frontIsA = false
       } else {
         imgA.source = nextUrl
+        imgA.z = 2
+        imgB.z = 1
+        frame.frontIsA = true
       }
     }
 
@@ -489,13 +926,7 @@ Item {
       cache: false
       asynchronous: true
       fillMode: Image.PreserveAspectFit
-      visible: (frame.activeIndex === 0 && status === Image.Ready) || (frame.activeIndex === 1 && imgB.status !== Image.Ready && status === Image.Ready)
-
-      onStatusChanged: {
-        if (status === Image.Ready && frame.activeIndex === 1) {
-          frame.activeIndex = 0
-        }
-      }
+      visible: status === Image.Ready
     }
 
     Image {
@@ -504,33 +935,33 @@ Item {
       cache: false
       asynchronous: true
       fillMode: Image.PreserveAspectFit
-      visible: (frame.activeIndex === 1 && status === Image.Ready) || (frame.activeIndex === 0 && imgA.status !== Image.Ready && status === Image.Ready)
-
-      onStatusChanged: {
-        if (status === Image.Ready && frame.activeIndex === 0) {
-          frame.activeIndex = 1
-        }
-      }
+      visible: status === Image.Ready
     }
 
     Timer {
-      interval: Math.max(100, Math.floor(1000 / Math.max(1, frame.fps)))
+      interval: Math.max(50, Math.floor(1000 / Math.max(1, frame.fps)))
       repeat: true
       running: window.visible && frame.baseUrl !== "" && frame.fps > 0
       onTriggered: frame.bump()
     }
 
-    Component.onCompleted: frame.bump()
-    onBaseUrlChanged: frame.bump()
+    Component.onCompleted: {
+      if (baseUrl !== "") bump()
+    }
+
+    onBaseUrlChanged: {
+      if (baseUrl !== "") bump()
+    }
   }
 
+  // Next-Gen Surveillance Card Tile
   component CameraTile: Rectangle {
     id: tile
 
     signal tap(string cameraId)
 
     property string cameraId: ""
-    property int fps: 5
+    property int fps: 0
     property string baseUrl: ""
     property var state: null
 
@@ -538,19 +969,21 @@ Item {
     readonly property bool streaming: state ? state.streaming === true : false
     readonly property string errorText: state && state.error ? String(state.error) : ""
 
-    color: Color.surface
-    radius: Style.cornerRadius
+    color: "#0d0f15"
+    radius: 12
     border.width: tileMouse.containsMouse ? 2 : 1
     border.color: {
-      if (tileMouse.containsMouse) return Color.accent
-      if (!online) return Color.urgent
-      return Color.border
+      if (tileMouse.containsMouse) return "#38bdf8"
+      if (!online) return "#f43f5e"
+      return Qt.rgba(255, 255, 255, 0.08)
     }
+    clip: true
 
+    // Inner Frame Viewport
     FrameImage {
       id: tileFrame
       anchors.fill: parent
-      anchors.margins: Style.space(2)
+      anchors.margins: 2
       cameraId: tile.cameraId
       fps: tile.fps
       baseUrl: tile.baseUrl
@@ -560,107 +993,147 @@ Item {
     // Offline / unconfigured placeholder
     Column {
       anchors.centerIn: parent
-      spacing: Style.space(4)
+      spacing: 8
       visible: !tile.online || !tileFrame.hasFrame
+
+      Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 48
+        height: 48
+        radius: 24
+        color: tile.online === false ? Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.15) : Qt.rgba(255, 255, 255, 0.05)
+        border.width: 1
+        border.color: tile.online === false ? Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.3) : Qt.rgba(255, 255, 255, 0.1)
+
+        Text {
+          anchors.centerIn: parent
+          text: tile.errorText !== "" ? "󰅚" : (tile.online === false ? "󰅚" : "󰑐")
+          font.pixelSize: 20
+          color: tile.online === false ? "#f43f5e" : "#94a3b8"
+        }
+      }
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: tile.errorText !== "" ? "󰅚" : (tile.online === false ? "󰅚" : "󰑐")
-        font.pixelSize: Style.font.heading
-        color: tile.online === false ? Color.urgent : Color.muted
-      }
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: tile.cameraId
-        font.pixelSize: Style.font.body
+        text: tile.cameraId.toUpperCase()
+        font.pixelSize: 13
         font.bold: true
-        color: Color.foreground
+        font.letterSpacing: 0.8
+        color: "#f1f5f9"
       }
+
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: tile.errorText !== "" ? tile.errorText : (tile.online === false ? "Offline" : "Connecting…")
-        font.pixelSize: Style.font.caption
-        color: Color.muted
-        visible: true
+        text: tile.errorText !== "" ? tile.errorText : (tile.online === false ? "Camera Offline" : "Fetching Snapshot…")
+        font.pixelSize: 11
+        color: "#94a3b8"
       }
     }
 
-    // Live Status Badge on Top Right
+    // Top Header Overlay Pills
+    // Left: Camera Name Badge
+    Rectangle {
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.margins: 10
+      height: 26
+      width: nameRow.implicitWidth + 18
+      radius: 13
+      color: Qt.rgba(10 / 255, 13 / 255, 18 / 255, 0.85)
+      border.width: 1
+      border.color: Qt.rgba(255, 255, 255, 0.14)
+      visible: tile.online && tileFrame.hasFrame
+
+      Row {
+        id: nameRow
+        anchors.centerIn: parent
+        spacing: 5
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: "󰹗"
+          font.pixelSize: 12
+          color: "#38bdf8"
+        }
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: tile.cameraId.toUpperCase()
+          color: "#f8fafc"
+          font.pixelSize: 11
+          font.bold: true
+          font.letterSpacing: 0.5
+        }
+      }
+    }
+
+    // Right: Status Tag Badge
     Rectangle {
       anchors.top: parent.top
       anchors.right: parent.right
-      anchors.margins: Style.space(6)
-      height: 20
-      width: liveBadgeRow.implicitWidth + Style.space(10)
-      radius: Style.cornerRadius
-      color: Qt.rgba(0, 0, 0, 0.65)
+      anchors.margins: 10
+      height: 26
+      width: tileStatusRow.implicitWidth + 18
+      radius: 13
+      color: Qt.rgba(10 / 255, 13 / 255, 18 / 255, 0.85)
+      border.width: 1
+      border.color: Qt.rgba(255, 255, 255, 0.14)
       visible: tile.online && tileFrame.hasFrame
 
       Row {
-        id: liveBadgeRow
+        id: tileStatusRow
         anchors.centerIn: parent
-        spacing: Style.space(4)
+        spacing: 6
 
         Rectangle {
           anchors.verticalCenter: parent.verticalCenter
-          width: 6
-          height: 6
-          radius: 3
-          color: Color.accent
+          width: 7
+          height: 7
+          radius: 3.5
+          color: "#10b981"
         }
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          text: "LIVE"
+          text: "READY"
           font.pixelSize: 10
           font.bold: true
-          color: "#ffffff"
+          font.letterSpacing: 0.5
+          color: "#34d399"
         }
       }
     }
 
-    // Name badge on Bottom Left
-    Rectangle {
-      anchors.bottom: parent.bottom
-      anchors.left: parent.left
-      anchors.margins: Style.space(6)
-      radius: Style.cornerRadius
-      color: Qt.rgba(0, 0, 0, 0.65)
-      visible: tile.online && tileFrame.hasFrame
-
-      Text {
-        anchors.margins: Style.space(4)
-        anchors.fill: parent
-        verticalAlignment: Text.AlignVCenter
-        text: tile.cameraId
-        color: "#ffffff"
-        font.pixelSize: Style.font.caption
-        font.bold: true
-      }
-    }
-
-    // Focus overlay hint on hover
+    // Hover Action Button (Center Glowing Glass Pill)
     Rectangle {
       anchors.centerIn: parent
-      width: focusHintRow.implicitWidth + Style.space(14)
-      height: 26
-      radius: 13
-      color: Qt.rgba(0, 0, 0, 0.75)
-      border.width: 1
-      border.color: Color.accent
+      width: focusActionRow.implicitWidth + 24
+      height: 38
+      radius: 19
+      color: Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.94)
+      border.width: 1.5
+      border.color: "#38bdf8"
       visible: tileMouse.containsMouse && tile.online && tileFrame.hasFrame
+      z: 15
 
       Row {
-        id: focusHintRow
+        id: focusActionRow
         anchors.centerIn: parent
-        spacing: Style.space(4)
+        spacing: 8
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          text: "󰍉 Focus"
-          font.pixelSize: Style.font.caption
+          text: "󰍉"
+          font.pixelSize: 14
+          color: "#38bdf8"
+        }
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Open Live Stream"
+          font.pixelSize: 12
           font.bold: true
-          color: Color.accent
+          color: "#f8fafc"
         }
       }
     }

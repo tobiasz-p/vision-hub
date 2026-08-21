@@ -89,12 +89,20 @@ Item {
     return true
   }
 
-  function focus(cameraId) {
+  function focusCamera(cameraId) {
     send({ cmd: "focus", camera: cameraId })
   }
 
-  function unfocus() {
+  function unfocusCamera() {
     send({ cmd: "unfocus" })
+  }
+
+  function focus(cameraId) {
+    focusCamera(cameraId)
+  }
+
+  function unfocus() {
+    unfocusCamera()
   }
 
   function refresh() {
@@ -153,6 +161,7 @@ Item {
 
   Process {
     id: daemonProc
+    stdinEnabled: true
 
     stdout: SplitParser {
       onRead: function(line) {
