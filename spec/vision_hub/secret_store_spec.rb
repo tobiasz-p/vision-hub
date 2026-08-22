@@ -40,12 +40,12 @@ RSpec.describe VisionHub::SecretStore do
     lookup_result.replace([false, '', ''])
     expect(store.lookup('front')).to eq('pw') # cached hit, no new call
     expect(store.lookup('garage')).to be_nil
-    expect(calls.size).to eq(2)
+    expect(calls.size).to eq(3) # 'front', 'garage', and fallback 'default'
 
     # The user adds the missing entry; the next retry must see it.
     lookup_result.replace([true, 'late', ''])
     expect(store.lookup('garage')).to eq('late')
-    expect(calls.size).to eq(3)
+    expect(calls.size).to eq(4)
   end
 
   it 're-queries after clear_cache!' do
@@ -56,6 +56,17 @@ RSpec.describe VisionHub::SecretStore do
     store.clear_cache!
 
     expect(store.lookup('front')).to eq('new')
+  end
+
+  it 'falls back to default camera secret when specific camera is not in keyring' do
+    lookup_map = { 'default' => [true, 'shared_pass', ''] }
+    custom_runner = lambda do |argv|
+      cam = argv[argv.index('camera') + 1]
+      lookup_map[cam] || [false, '', 'No result']
+    end
+    store = described_class.new(application_id: 'tobiasz-p.vision-hub', runner: custom_runner)
+
+    expect(store.lookup('cam2')).to eq('shared_pass')
   end
 
   it 'builds a store hint containing attributes but no secret material' do

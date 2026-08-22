@@ -90,7 +90,7 @@ RSpec.describe VisionHub::FramePump do
       argv = pump.build_argv('rtsp://u:p@h/s')
 
       expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
-      expect(argv).to include('-frames:v', '1', '-y')
+      expect(argv).to include('-frames:v', '1', '-y', '-atomic_writing', '1')
       expect(argv[argv.index('-vf') + 1]).to eq('scale=640:-1')
       expect(argv).to include('-hwaccel', 'auto')
     end
@@ -100,7 +100,7 @@ RSpec.describe VisionHub::FramePump do
       argv = main_pump.build_argv('rtsp://u:p@h/s')
 
       expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
-      expect(argv).to include('-update', '1', '-y')
+      expect(argv).to include('-update', '1', '-atomic_writing', '1', '-y')
       expect(argv[argv.index('-vf') + 1]).to eq('fps=10,scale=1280:-1')
       expect(argv).to include('-hwaccel', 'auto')
     end

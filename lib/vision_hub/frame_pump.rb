@@ -102,13 +102,15 @@ module VisionHub
 
     def build_argv(url)
       argv = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning']
+      argv += ['-fflags', '+genpts+discardcorrupt', '-flags', 'low_delay']
       argv += ['-hwaccel', 'auto'] if @hwaccel
       argv += input_argv(url)
       if @role == :sub
-        argv + ['-an', '-sn', '-dn', '-vf', 'scale=640:-1', '-frames:v', '1', '-q:v', '6', '-y', frame_path]
+        argv + ['-an', '-sn', '-dn', '-vf', 'scale=640:-1', '-frames:v', '1',
+                '-q:v', '6', '-atomic_writing', '1', '-y', frame_path]
       else
-        argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1280:-1", '-q:v', '6', '-update', '1',
-                '-y', frame_path]
+        argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1280:-1",
+                '-q:v', '6', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
       end
     end
 

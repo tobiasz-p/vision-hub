@@ -33,8 +33,7 @@ module VisionHub
       cached = @cache[camera_id]
       return cached unless cached.nil?
 
-      ok, stdout = @runner.call(lookup_argv(camera_id))
-      value = ok && !stdout.strip.empty? ? stdout.strip : nil
+      value = fetch_keyring(camera_id) || (camera_id == 'default' ? nil : lookup('default'))
       @cache[camera_id] = value unless value.nil?
       value
     end
@@ -59,6 +58,11 @@ module VisionHub
     end
 
     private
+
+    def fetch_keyring(camera_id)
+      ok, stdout = @runner.call(lookup_argv(camera_id))
+      ok && !stdout.strip.empty? ? stdout.strip : nil
+    end
 
     def lookup_argv(camera_id)
       ['secret-tool', 'lookup', APPLICATION_ATTR, @application_id, CAMERA_ATTR, camera_id]

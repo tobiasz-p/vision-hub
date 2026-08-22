@@ -4,7 +4,7 @@ import qs.Commons
 import qs.Ui
 
 // VisionHub modern surveillance live-view window:
-// Next-gen multi-camera grid and cinema single-camera live view.
+// Next-gen multi-camera grid and cinema single-camera live view with dynamic theme integration.
 Item {
   id: root
 
@@ -115,7 +115,7 @@ Item {
     id: window
 
     title: "VisionHub" + (root.focusedId !== "" ? " — " + root.focusedId : "")
-    color: "#090b10"
+    color: Color.background
     implicitWidth: 1120
     implicitHeight: 740
     minimumSize: Qt.size(680, 480)
@@ -163,18 +163,18 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 56
-        color: Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.92)
+        color: Color.popups.background
         border.width: 1
-        border.color: Qt.rgba(255, 255, 255, 0.08)
+        border.color: Color.popups.border
         z: 30
 
-        // Subtle gradient hairline highlight at the top
+        // Subtle hairline highlight at the top
         Rectangle {
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
           height: 1
-          color: Qt.rgba(255, 255, 255, 0.12)
+          color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1)
         }
 
         // Left Header Section (Brand & Status)
@@ -184,21 +184,21 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(12)
 
-          // Brand Glyph Box
+          // Brand Glyph Box (Themed)
           Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 36
             radius: 10
-            color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.14)
+            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.16)
             border.width: 1
-            border.color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.35)
+            border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.4)
 
             Text {
               anchors.centerIn: parent
               text: "󰹗"
               font.pixelSize: 18
-              color: "#38bdf8"
+              color: Color.accent
             }
           }
 
@@ -214,14 +214,14 @@ Item {
                 font.pixelSize: 13
                 font.bold: true
                 font.letterSpacing: 1.2
-                color: "#f1f5f9"
+                color: Color.foreground
               }
               Text {
                 text: "HUB"
                 font.pixelSize: 13
                 font.bold: true
                 font.letterSpacing: 1.2
-                color: "#38bdf8"
+                color: Color.accent
               }
             }
 
@@ -230,11 +230,11 @@ Item {
               font.pixelSize: 10
               font.bold: true
               font.letterSpacing: 0.5
-              color: "#94a3b8"
+              color: Color.muted
             }
           }
 
-          // Live / Status Capsule
+          // Live / Status Capsule (Healthy Green / Alert Red)
           Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             height: 24
@@ -242,12 +242,12 @@ Item {
             radius: 12
             color: {
               if (root.focusedId !== "") return Qt.rgba(16 / 255, 185 / 255, 129 / 255, 0.18)
-              return root.onlineCount === root.totalCount ? Qt.rgba(16 / 255, 185 / 255, 129 / 255, 0.14) : Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.18)
+              return root.onlineCount === root.totalCount ? Qt.rgba(16 / 255, 185 / 255, 129 / 255, 0.14) : Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.18)
             }
             border.width: 1
             border.color: {
               if (root.focusedId !== "") return "#10b981"
-              return root.onlineCount === root.totalCount ? "#10b981" : "#f43f5e"
+              return root.onlineCount === root.totalCount ? "#10b981" : Color.urgent
             }
 
             Row {
@@ -262,7 +262,7 @@ Item {
                 width: 7
                 height: 7
                 radius: 3.5
-                color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#10b981" : "#f43f5e"
+                color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#10b981" : Color.urgent
 
                 SequentialAnimation on opacity {
                   running: true
@@ -281,25 +281,25 @@ Item {
                 font.pixelSize: 10
                 font.bold: true
                 font.letterSpacing: 0.4
-                color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#34d399" : "#fda4af"
+                color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#34d399" : Color.urgent
               }
             }
           }
         }
 
-        // Center Section: View Mode & Camera Pills
+        // Center Section: View Mode & Camera Switcher Tabs
         Row {
           anchors.centerIn: parent
           spacing: 8
 
-          // Grid vs Focus Segmented Switcher
+          // Grid vs Focus Segmented Switcher (Themed)
           Rectangle {
             height: 34
             width: segRow.implicitWidth + 6
             radius: 17
-            color: Qt.rgba(255, 255, 255, 0.05)
+            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
             border.width: 1
-            border.color: Qt.rgba(255, 255, 255, 0.1)
+            border.color: Color.popups.border
 
             Row {
               id: segRow
@@ -311,9 +311,9 @@ Item {
                 width: 76
                 height: 28
                 radius: 14
-                color: root.focusedId === "" ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.22) : (gridTabHover.containsMouse ? Qt.rgba(255, 255, 255, 0.08) : "transparent")
+                color: root.focusedId === "" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (gridTabHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
                 border.width: root.focusedId === "" ? 1 : 0
-                border.color: "#38bdf8"
+                border.color: Color.accent
 
                 Row {
                   anchors.centerIn: parent
@@ -322,14 +322,14 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "󰕰"
                     font.pixelSize: 12
-                    color: root.focusedId === "" ? "#38bdf8" : "#94a3b8"
+                    color: root.focusedId === "" ? Color.accent : Color.muted
                   }
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Grid"
                     font.pixelSize: 11
                     font.bold: root.focusedId === ""
-                    color: root.focusedId === "" ? "#f1f5f9" : "#94a3b8"
+                    color: root.focusedId === "" ? Color.foreground : Color.muted
                   }
                 }
 
@@ -342,14 +342,14 @@ Item {
                 }
               }
 
-              // Focus Tab
+              // Cinema Focus Tab
               Rectangle {
                 width: 84
                 height: 28
                 radius: 14
-                color: root.focusedId !== "" ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.22) : (focusTabHover.containsMouse ? Qt.rgba(255, 255, 255, 0.08) : "transparent")
+                color: root.focusedId !== "" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (focusTabHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
                 border.width: root.focusedId !== "" ? 1 : 0
-                border.color: "#38bdf8"
+                border.color: Color.accent
 
                 Row {
                   anchors.centerIn: parent
@@ -358,14 +358,14 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "󰍉"
                     font.pixelSize: 12
-                    color: root.focusedId !== "" ? "#38bdf8" : "#94a3b8"
+                    color: root.focusedId !== "" ? Color.accent : Color.muted
                   }
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Cinema"
                     font.pixelSize: 11
                     font.bold: root.focusedId !== ""
-                    color: root.focusedId !== "" ? "#f1f5f9" : "#94a3b8"
+                    color: root.focusedId !== "" ? Color.foreground : Color.muted
                   }
                 }
 
@@ -384,7 +384,7 @@ Item {
             }
           }
 
-          // Header Camera Quick Selectors (in focused mode)
+          // Header Camera Quick Selectors (Themed)
           Row {
             visible: root.focusedId !== "" && root.totalCount > 1
             anchors.verticalCenter: parent.verticalCenter
@@ -398,16 +398,16 @@ Item {
                 width: 48
                 height: 28
                 radius: 14
-                color: isCur ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.25) : (tabCamHover.containsMouse ? Qt.rgba(255, 255, 255, 0.1) : Qt.rgba(255, 255, 255, 0.04))
-                border.width: isCur ? 1 : 1
-                border.color: isCur ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.1)
+                color: isCur ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (tabCamHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.04))
+                border.width: 1
+                border.color: isCur ? Color.accent : Color.popups.border
 
                 Text {
                   anchors.centerIn: parent
                   text: parent.modelData
                   font.pixelSize: 11
                   font.bold: parent.isCur
-                  color: parent.isCur ? "#38bdf8" : "#94a3b8"
+                  color: parent.isCur ? Color.accent : Color.muted
                 }
 
                 MouseArea {
@@ -429,16 +429,16 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: 8
 
-          // Grid Column density selector
+          // Grid Column Density Selector (Themed)
           Rectangle {
             visible: root.focusedId === "" && root.totalCount > 1
             anchors.verticalCenter: parent.verticalCenter
             height: 32
             width: colBoxRow.implicitWidth + 6
             radius: 16
-            color: Qt.rgba(255, 255, 255, 0.05)
+            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
             border.width: 1
-            border.color: Qt.rgba(255, 255, 255, 0.1)
+            border.color: Color.popups.border
 
             Row {
               id: colBoxRow
@@ -452,14 +452,14 @@ Item {
                   width: 28
                   height: 26
                   radius: 13
-                  color: root.columns === modelData ? "#38bdf8" : (cHover.containsMouse ? Qt.rgba(255, 255, 255, 0.1) : "transparent")
+                  color: root.columns === modelData ? Color.accent : (cHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : "transparent")
 
                   Text {
                     anchors.centerIn: parent
                     text: parent.modelData + "×"
                     font.pixelSize: 10
                     font.bold: root.columns === parent.modelData
-                    color: root.columns === parent.modelData ? "#090b10" : "#cbd5e1"
+                    color: root.columns === parent.modelData ? Color.background : Color.foreground
                   }
 
                   MouseArea {
@@ -474,16 +474,16 @@ Item {
             }
           }
 
-          // Patrol Mode Toggle (in focused view)
+          // Patrol Mode Toggle (Themed)
           Rectangle {
             visible: root.focusedId !== "" && root.totalCount > 1
             anchors.verticalCenter: parent.verticalCenter
             height: 32
             width: patrolRow.implicitWidth + 18
             radius: 16
-            color: root.patrolMode ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.25) : (patrolHover.containsMouse ? Qt.rgba(255, 255, 255, 0.1) : Qt.rgba(255, 255, 255, 0.05))
+            color: root.patrolMode ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (patrolHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
             border.width: 1
-            border.color: root.patrolMode ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.1)
+            border.color: root.patrolMode ? Color.accent : Color.popups.border
 
             Row {
               id: patrolRow
@@ -494,14 +494,14 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰑖"
                 font.pixelSize: 12
-                color: root.patrolMode ? "#38bdf8" : "#94a3b8"
+                color: root.patrolMode ? Color.accent : Color.muted
               }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Patrol"
                 font.pixelSize: 11
                 font.bold: root.patrolMode
-                color: root.patrolMode ? "#f1f5f9" : "#cbd5e1"
+                color: root.patrolMode ? Color.foreground : Color.foreground
               }
             }
 
@@ -514,15 +514,15 @@ Item {
             }
           }
 
-          // Refresh Button
+          // Refresh Button (Themed)
           Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             height: 32
             width: refreshBtnRow.implicitWidth + 18
             radius: 16
-            color: refreshHover.containsMouse ? Qt.rgba(255, 255, 255, 0.12) : Qt.rgba(255, 255, 255, 0.05)
+            color: refreshHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
             border.width: 1
-            border.color: Qt.rgba(255, 255, 255, 0.1)
+            border.color: Color.popups.border
 
             Row {
               id: refreshBtnRow
@@ -533,14 +533,14 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰑐"
                 font.pixelSize: 12
-                color: "#38bdf8"
+                color: Color.accent
               }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Refresh"
                 font.pixelSize: 11
                 font.bold: true
-                color: "#e2e8f0"
+                color: Color.foreground
               }
             }
 
@@ -561,15 +561,15 @@ Item {
             width: 32
             height: 32
             radius: 16
-            color: closeHover.containsMouse ? Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.25) : Qt.rgba(255, 255, 255, 0.05)
+            color: closeHover.containsMouse ? Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.25) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
             border.width: 1
-            border.color: closeHover.containsMouse ? "#f43f5e" : Qt.rgba(255, 255, 255, 0.1)
+            border.color: closeHover.containsMouse ? Color.urgent : Color.popups.border
 
             Text {
               anchors.centerIn: parent
               text: "✕"
               font.pixelSize: 12
-              color: closeHover.containsMouse ? "#f43f5e" : "#94a3b8"
+              color: closeHover.containsMouse ? Color.urgent : Color.muted
             }
 
             MouseArea {
@@ -600,10 +600,10 @@ Item {
             Item {
               anchors.fill: parent
 
-              // Deep surveillance cinema canvas
+              // Background canvas
               Rectangle {
                 anchors.fill: parent
-                color: "#06070a"
+                color: Color.background
               }
 
               // Live Frame Display
@@ -626,9 +626,9 @@ Item {
                 height: 30
                 width: streamHudRow.implicitWidth + 20
                 radius: 15
-                color: Qt.rgba(10 / 255, 13 / 255, 18 / 255, 0.85)
+                color: Color.popups.background
                 border.width: 1
-                border.color: Qt.rgba(255, 255, 255, 0.15)
+                border.color: Color.popups.border
                 z: 15
 
                 Row {
@@ -650,14 +650,14 @@ Item {
                     font.pixelSize: 11
                     font.bold: true
                     font.letterSpacing: 0.5
-                    color: "#f1f5f9"
+                    color: Color.foreground
                   }
 
                   Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     height: 12
                     width: 1
-                    color: Qt.rgba(255, 255, 255, 0.2)
+                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.2)
                   }
 
                   Text {
@@ -665,7 +665,7 @@ Item {
                     text: "HW-ACCEL"
                     font.pixelSize: 10
                     font.bold: true
-                    color: "#38bdf8"
+                    color: Color.accent
                   }
                 }
               }
@@ -679,9 +679,9 @@ Item {
                 width: 48
                 height: 48
                 radius: 24
-                color: prevHover.containsMouse ? Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.95) : Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.65)
+                color: prevHover.containsMouse ? Color.popups.background : Qt.rgba(Color.background.r, Color.background.g, Color.background.b, 0.65)
                 border.width: 1.5
-                border.color: prevHover.containsMouse ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.15)
+                border.color: prevHover.containsMouse ? Color.accent : Color.popups.border
                 visible: root.totalCount > 1
                 z: 20
 
@@ -690,7 +690,7 @@ Item {
                   text: "‹"
                   font.pixelSize: 24
                   font.bold: true
-                  color: prevHover.containsMouse ? "#38bdf8" : "#f1f5f9"
+                  color: prevHover.containsMouse ? Color.accent : Color.foreground
                 }
 
                 MouseArea {
@@ -710,9 +710,9 @@ Item {
                 width: 48
                 height: 48
                 radius: 24
-                color: nextHover.containsMouse ? Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.95) : Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.65)
+                color: nextHover.containsMouse ? Color.popups.background : Qt.rgba(Color.background.r, Color.background.g, Color.background.b, 0.65)
                 border.width: 1.5
-                border.color: nextHover.containsMouse ? "#38bdf8" : Qt.rgba(255, 255, 255, 0.15)
+                border.color: nextHover.containsMouse ? Color.accent : Color.popups.border
                 visible: root.totalCount > 1
                 z: 20
 
@@ -721,7 +721,7 @@ Item {
                   text: "›"
                   font.pixelSize: 24
                   font.bold: true
-                  color: nextHover.containsMouse ? "#38bdf8" : "#f1f5f9"
+                  color: nextHover.containsMouse ? Color.accent : Color.foreground
                 }
 
                 MouseArea {
@@ -733,7 +733,7 @@ Item {
                 }
               }
 
-              // Floating Bottom Camera Strip Dock (Glassmorphism Pill)
+              // Floating Bottom Camera Strip Dock (100% Theme Synced)
               Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
@@ -741,9 +741,9 @@ Item {
                 height: 52
                 width: thumbRow.implicitWidth + 24
                 radius: 26
-                color: Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.9)
+                color: Color.popups.background
                 border.width: 1
-                border.color: Qt.rgba(255, 255, 255, 0.15)
+                border.color: Color.popups.border
                 z: 20
 
                 Row {
@@ -761,9 +761,8 @@ Item {
                       height: 36
                       radius: 18
 
-                      color: isSelected ? Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.22) : (thumbHover.containsMouse ? Qt.rgba(255, 255, 255, 0.12) : Qt.rgba(255, 255, 255, 0.05))
-                      border.width: isSelected ? 2 : 1
-                      border.color: isSelected ? "#38bdf8" : (thumbHover.containsMouse ? Qt.rgba(255, 255, 255, 0.3) : Qt.rgba(255, 255, 255, 0.1))
+                      color: isSelected ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (thumbHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
+                      border.width: 0
 
                       Row {
                         id: capsuleRow
@@ -775,7 +774,7 @@ Item {
                           width: 7
                           height: 7
                           radius: 3.5
-                          color: cameraThumbItem.isSelected ? "#38bdf8" : "#64748b"
+                          color: cameraThumbItem.isSelected ? Color.accent : Color.muted
                         }
 
                         Text {
@@ -784,7 +783,7 @@ Item {
                           font.pixelSize: 11
                           font.bold: true
                           font.letterSpacing: 0.5
-                          color: cameraThumbItem.isSelected ? "#38bdf8" : "#e2e8f0"
+                          color: cameraThumbItem.isSelected ? Color.accent : Color.foreground
                         }
                       }
 
@@ -848,15 +847,15 @@ Item {
             width: 72
             height: 72
             radius: 36
-            color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.15)
+            color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15)
             border.width: 1
-            border.color: Qt.rgba(56 / 255, 189 / 255, 248 / 255, 0.3)
+            border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.3)
 
             Text {
               anchors.centerIn: parent
               text: "󰹗"
               font.pixelSize: 32
-              color: "#38bdf8"
+              color: Color.accent
             }
           }
 
@@ -871,7 +870,7 @@ Item {
               }
               return "No Cameras Configured"
             }
-            color: "#f1f5f9"
+            color: Color.foreground
             font.pixelSize: 18
             font.bold: true
           }
@@ -879,7 +878,7 @@ Item {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: "Create ~/.config/vision-hub/cameras.json and store credentials in gnome-keyring"
-            color: "#94a3b8"
+            color: Color.muted
             font.pixelSize: 13
           }
         }
@@ -954,7 +953,7 @@ Item {
     }
   }
 
-  // Next-Gen Surveillance Card Tile
+  // Next-Gen Surveillance Card Tile (Themed)
   component CameraTile: Rectangle {
     id: tile
 
@@ -969,13 +968,13 @@ Item {
     readonly property bool streaming: state ? state.streaming === true : false
     readonly property string errorText: state && state.error ? String(state.error) : ""
 
-    color: "#0d0f15"
+    color: Color.background
     radius: 12
     border.width: tileMouse.containsMouse ? 2 : 1
     border.color: {
-      if (tileMouse.containsMouse) return "#38bdf8"
-      if (!online) return "#f43f5e"
-      return Qt.rgba(255, 255, 255, 0.08)
+      if (tileMouse.containsMouse) return Color.accent
+      if (!online) return Color.urgent
+      return Color.popups.border
     }
     clip: true
 
@@ -1001,15 +1000,15 @@ Item {
         width: 48
         height: 48
         radius: 24
-        color: tile.online === false ? Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.15) : Qt.rgba(255, 255, 255, 0.05)
+        color: tile.online === false ? Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.15) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
         border.width: 1
-        border.color: tile.online === false ? Qt.rgba(244 / 255, 63 / 255, 94 / 255, 0.3) : Qt.rgba(255, 255, 255, 0.1)
+        border.color: tile.online === false ? Color.urgent : Color.popups.border
 
         Text {
           anchors.centerIn: parent
           text: tile.errorText !== "" ? "󰅚" : (tile.online === false ? "󰅚" : "󰑐")
           font.pixelSize: 20
-          color: tile.online === false ? "#f43f5e" : "#94a3b8"
+          color: tile.online === false ? Color.urgent : Color.muted
         }
       }
 
@@ -1019,19 +1018,19 @@ Item {
         font.pixelSize: 13
         font.bold: true
         font.letterSpacing: 0.8
-        color: "#f1f5f9"
+        color: Color.foreground
       }
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
         text: tile.errorText !== "" ? tile.errorText : (tile.online === false ? "Camera Offline" : "Fetching Snapshot…")
         font.pixelSize: 11
-        color: "#94a3b8"
+        color: Color.muted
       }
     }
 
     // Top Header Overlay Pills
-    // Left: Camera Name Badge
+    // Left: Camera Name Badge (Themed)
     Rectangle {
       anchors.top: parent.top
       anchors.left: parent.left
@@ -1039,9 +1038,9 @@ Item {
       height: 26
       width: nameRow.implicitWidth + 18
       radius: 13
-      color: Qt.rgba(10 / 255, 13 / 255, 18 / 255, 0.85)
+      color: Color.popups.background
       border.width: 1
-      border.color: Qt.rgba(255, 255, 255, 0.14)
+      border.color: Color.popups.border
       visible: tile.online && tileFrame.hasFrame
 
       Row {
@@ -1053,13 +1052,13 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           text: "󰹗"
           font.pixelSize: 12
-          color: "#38bdf8"
+          color: Color.accent
         }
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: tile.cameraId.toUpperCase()
-          color: "#f8fafc"
+          color: Color.foreground
           font.pixelSize: 11
           font.bold: true
           font.letterSpacing: 0.5
@@ -1067,7 +1066,7 @@ Item {
       }
     }
 
-    // Right: Status Tag Badge
+    // Right: Status Tag Badge (Health Green)
     Rectangle {
       anchors.top: parent.top
       anchors.right: parent.right
@@ -1075,9 +1074,9 @@ Item {
       height: 26
       width: tileStatusRow.implicitWidth + 18
       radius: 13
-      color: Qt.rgba(10 / 255, 13 / 255, 18 / 255, 0.85)
+      color: Color.popups.background
       border.width: 1
-      border.color: Qt.rgba(255, 255, 255, 0.14)
+      border.color: Color.popups.border
       visible: tile.online && tileFrame.hasFrame
 
       Row {
@@ -1104,15 +1103,15 @@ Item {
       }
     }
 
-    // Hover Action Button (Center Glowing Glass Pill)
+    // Hover Action Button (Center Glowing Themed Pill)
     Rectangle {
       anchors.centerIn: parent
       width: focusActionRow.implicitWidth + 24
       height: 38
       radius: 19
-      color: Qt.rgba(14 / 255, 17 / 255, 24 / 255, 0.94)
+      color: Color.popups.background
       border.width: 1.5
-      border.color: "#38bdf8"
+      border.color: Color.accent
       visible: tileMouse.containsMouse && tile.online && tileFrame.hasFrame
       z: 15
 
@@ -1125,7 +1124,7 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           text: "󰍉"
           font.pixelSize: 14
-          color: "#38bdf8"
+          color: Color.accent
         }
 
         Text {
@@ -1133,7 +1132,7 @@ Item {
           text: "Open Live Stream"
           font.pixelSize: 12
           font.bold: true
-          color: "#f8fafc"
+          color: Color.foreground
         }
       }
     }
