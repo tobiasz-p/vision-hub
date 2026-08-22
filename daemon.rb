@@ -20,6 +20,7 @@ trap('TERM') { exit }
 options = {
   fps: 5,
   main_fps: 15,
+  quality: 'hd',
   hwaccel: true,
   input_strategy: :argv,
   probe_interval: VisionHub::Supervisor::DEFAULT_PROBE_INTERVAL
@@ -30,6 +31,7 @@ parser = OptionParser.new do |opts|
   opts.on('--runtime-dir DIR', 'tmpfs directory for frames and playlists') { |v| options[:runtime_dir] = v }
   opts.on('--fps N', Integer, 'sub-stream target fps') { |v| options[:fps] = v }
   opts.on('--main-fps N', Integer, 'focused-stream target fps') { |v| options[:main_fps] = v }
+  opts.on('--quality PRESET', String, 'focused-stream quality (eco, hd, ultra, max)') { |v| options[:quality] = v }
   opts.on('--no-hwaccel', 'disable hardware decode') { options[:hwaccel] = false }
   opts.on('--input STRATEGY', %w[argv concat_file], 'credential delivery strategy') do |v|
     options[:input_strategy] = v.to_sym
@@ -63,6 +65,7 @@ supervisor = VisionHub::Supervisor.new(
   secrets: VisionHub::SecretStore.new(application_id: 'tobiasz-p.vision-hub'),
   fps: options[:fps],
   main_fps: options[:main_fps],
+  quality: options[:quality],
   hwaccel: options[:hwaccel],
   input_strategy: options[:input_strategy],
   probe_interval: options[:probe_interval],

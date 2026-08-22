@@ -19,6 +19,12 @@ Item {
   property string focusedId: ""
   property int columns: 3
   property bool patrolMode: false
+  property int streamFps: visionService ? visionService.mainFps : 15
+  property bool fpsDropdownOpen: false
+  property bool fillAspect: false
+  readonly property bool isAudioOn: visionService ? visionService.audioEnabled : false
+
+  readonly property var fpsOptions: [5, 10, 15, 20, 25, 30]
 
   readonly property string pluginId: manifest ? manifest.id : "tobiasz-p.vision-hub"
   readonly property var visionService: service || (shell && typeof shell.serviceFor === "function" ? shell.serviceFor(root.pluginId) : null)
@@ -55,6 +61,7 @@ Item {
       root.columns = isFinite(n) && n >= 1 && n <= 6 ? n : 3
     }
     closingFromHost = false
+    root.fpsDropdownOpen = false
     window.visible = true
     if (payload.camera) root.showFocused(String(payload.camera))
     windowContent.forceActiveFocus()
@@ -63,6 +70,7 @@ Item {
   function close() {
     root.showGrid()
     root.patrolMode = false
+    root.fpsDropdownOpen = false
     closingFromHost = true
     window.visible = false
   }
@@ -74,14 +82,16 @@ Item {
 
   function showFocused(cameraId) {
     if (!cameraId) return
+    root.fpsDropdownOpen = false
     root.focusedId = cameraId
     if (root.visionService && typeof root.visionService.focusCamera === "function") {
-      root.visionService.focusCamera(cameraId)
+      root.visionService.focusCamera(cameraId, root.streamFps)
     }
   }
 
   function showGrid() {
     root.patrolMode = false
+    root.fpsDropdownOpen = false
     if (root.focusedId !== "" && root.visionService && typeof root.visionService.unfocusCamera === "function") {
       root.visionService.unfocusCamera()
     }
@@ -155,6 +165,18 @@ Item {
       Keys.onDigit3Pressed: if (root.cameraList.length >= 3) root.showFocused(root.cameraList[2])
       Keys.onDigit4Pressed: if (root.cameraList.length >= 4) root.showFocused(root.cameraList[3])
       Keys.onDigit5Pressed: if (root.cameraList.length >= 5) root.showFocused(root.cameraList[4])
+
+      Keys.onPressed: function(event) {
+        if ((event.key === Qt.Key_M || event.text === "m" || event.text === "M") && root.focusedId !== "") {
+          if (root.visionService && typeof root.visionService.toggleAudio === "function") {
+            root.visionService.toggleAudio(root.focusedId)
+          }
+          event.accepted = true
+        } else if ((event.key === Qt.Key_A || event.text === "a" || event.text === "A") && root.focusedId !== "") {
+          root.fillAspect = !root.fillAspect
+          event.accepted = true
+        }
+      }
 
       // ---- Modern Glass Header Bar ----------------------------------------
       Rectangle {
@@ -275,7 +297,7 @@ Item {
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: {
-                  if (root.focusedId !== "") return root.patrolMode ? "PATROL · 10 FPS" : "LIVE 10 FPS"
+                  if (root.focusedId !== "") return "LIVE " + root.streamFps + " FPS"
                   return root.onlineCount === root.totalCount ? "ALL HEALTHY" : (root.totalCount - root.onlineCount) + " OFFLINE"
                 }
                 font.pixelSize: 10
@@ -474,6 +496,217 @@ Item {
             }
           }
 
+          // Stream FPS Dropdown (in cinema view)
+          Item {
+            visible: root.focusedId !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            width: fpsBtnRect.width
+            height: 32
+            z: 50
+
+            Rectangle {
+              id: fpsBtnRect
+              height: 32
+              width: fpsBtnRow.implicitWidth + 18
+              radius: 16
+              color: root.fpsDropdownOpen ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (fpsBtnHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
+              border.width: 1
+              border.color: root.fpsDropdownOpen ? Color.accent : Color.popups.border
+
+              Row {
+                id: fpsBtnRow
+                anchors.centerIn: parent
+                spacing: 5
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "󰑖"
+                  font.pixelSize: 11
+                  color: Color.accent
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.streamFps + " FPS"
+                  font.pixelSize: 11
+                  font.bold: true
+                  color: Color.foreground
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.fpsDropdownOpen ? "▴" : "▾"
+                  font.pixelSize: 10
+                  color: Color.muted
+                }
+              }
+
+              MouseArea {
+                id: fpsBtnHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.fpsDropdownOpen = !root.fpsDropdownOpen
+              }
+            }
+
+            // Floating Dropdown Menu
+            Rectangle {
+              visible: root.fpsDropdownOpen
+              anchors.top: fpsBtnRect.bottom
+              anchors.topMargin: 6
+              anchors.right: fpsBtnRect.right
+              width: 106
+              height: fpsListCol.implicitHeight + 10
+              radius: 12
+              color: Color.popups.background
+              border.width: 1
+              border.color: Color.popups.border
+              z: 100
+
+              Column {
+                id: fpsListCol
+                anchors.centerIn: parent
+                spacing: 2
+
+                Repeater {
+                  model: root.fpsOptions
+                  delegate: Rectangle {
+                    id: fpsOptionItem
+                    required property int modelData
+                    readonly property bool isSelected: root.streamFps === modelData
+                    width: 94
+                    height: 28
+                    radius: 8
+                    color: isSelected ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2) : (optHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
+
+                    Row {
+                      anchors.centerIn: parent
+                      spacing: 6
+
+                      Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: fpsOptionItem.modelData + " FPS"
+                        font.pixelSize: 11
+                        font.bold: fpsOptionItem.isSelected
+                        color: fpsOptionItem.isSelected ? Color.accent : Color.foreground
+                      }
+
+                      Text {
+                        visible: fpsOptionItem.isSelected
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "✓"
+                        font.pixelSize: 10
+                        font.bold: true
+                        color: Color.accent
+                      }
+                    }
+
+                    MouseArea {
+                      id: optHover
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        root.streamFps = fpsOptionItem.modelData
+                        root.fpsDropdownOpen = false
+                        if (root.visionService && typeof root.visionService.setMainFps === "function") {
+                          root.visionService.setMainFps(fpsOptionItem.modelData)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Audio Mute/Unmute Toggle (in cinema view)
+          Rectangle {
+            visible: root.focusedId !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            height: 32
+            width: audioBtnRow.implicitWidth + 18
+            radius: 16
+            color: root.isAudioOn ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (audioHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
+            border.width: 1
+            border.color: root.isAudioOn ? Color.accent : Color.popups.border
+
+            Row {
+              id: audioBtnRow
+              anchors.centerIn: parent
+              spacing: 6
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.isAudioOn ? "󰕾" : "󰕿"
+                font.pixelSize: 13
+                color: root.isAudioOn ? Color.accent : Color.muted
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.isAudioOn ? "Audio ON" : "Muted"
+                font.pixelSize: 11
+                font.bold: root.isAudioOn
+                color: root.isAudioOn ? Color.foreground : Color.foreground
+              }
+            }
+
+            MouseArea {
+              id: audioHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                if (root.visionService && typeof root.visionService.toggleAudio === "function") {
+                  root.visionService.toggleAudio(root.focusedId)
+                }
+              }
+            }
+          }
+
+          // Aspect Ratio (Fit / Fill) Toggle (in cinema view)
+          Rectangle {
+            visible: root.focusedId !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            height: 32
+            width: aspectBtnRow.implicitWidth + 18
+            radius: 16
+            color: root.fillAspect ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (aspectHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
+            border.width: 1
+            border.color: root.fillAspect ? Color.accent : Color.popups.border
+
+            Row {
+              id: aspectBtnRow
+              anchors.centerIn: parent
+              spacing: 6
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.fillAspect ? "󰘕" : "󰊓"
+                font.pixelSize: 12
+                color: root.fillAspect ? Color.accent : Color.muted
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.fillAspect ? "Fill" : "Fit"
+                font.pixelSize: 11
+                font.bold: root.fillAspect
+                color: root.fillAspect ? Color.foreground : Color.foreground
+              }
+            }
+
+            MouseArea {
+              id: aspectHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.fillAspect = !root.fillAspect
+            }
+          }
+
           // Patrol Mode Toggle (Themed)
           Rectangle {
             visible: root.focusedId !== "" && root.totalCount > 1
@@ -613,7 +846,8 @@ Item {
                 anchors.margins: Style.space(16)
                 anchors.bottomMargin: Style.space(88)
                 cameraId: root.focusedId
-                fps: root.visionService ? root.visionService.mainFps : 10
+                fps: root.streamFps
+                fillMode: root.fillAspect ? Image.PreserveAspectCrop : Image.PreserveAspectFit
                 baseUrl: root.visionService ? root.visionService.frameUrl(root.focusedId) : ""
                 state: root.visionService ? root.visionService.stateFor(root.focusedId) : null
               }
@@ -646,7 +880,7 @@ Item {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.focusedId.toUpperCase() + " · 1080P HEVC"
+                    text: root.focusedId.toUpperCase() + " · LIVE RTSP"
                     font.pixelSize: 11
                     font.bold: true
                     font.letterSpacing: 0.5
@@ -662,10 +896,27 @@ Item {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "HW-ACCEL"
+                    text: root.streamFps + " FPS HW"
                     font.pixelSize: 10
                     font.bold: true
                     color: Color.accent
+                  }
+
+                  Rectangle {
+                    visible: root.isAudioOn
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 12
+                    width: 1
+                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.2)
+                  }
+
+                  Text {
+                    visible: root.isAudioOn
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "󰕾 AUDIO"
+                    font.pixelSize: 10
+                    font.bold: true
+                    color: "#10b981"
                   }
                 }
               }
@@ -896,6 +1147,7 @@ Item {
 
     property string cameraId: ""
     property int fps: 0
+    property int fillMode: Image.PreserveAspectFit
     property string baseUrl: ""
     property var state: null
     property int tick: 0
@@ -908,14 +1160,8 @@ Item {
       var nextUrl = baseUrl + "?t=" + frame.tick
       if (frame.frontIsA) {
         imgB.source = nextUrl
-        imgB.z = 2
-        imgA.z = 1
-        frame.frontIsA = false
       } else {
         imgA.source = nextUrl
-        imgA.z = 2
-        imgB.z = 1
-        frame.frontIsA = true
       }
     }
 
@@ -924,8 +1170,15 @@ Item {
       anchors.fill: parent
       cache: false
       asynchronous: true
-      fillMode: Image.PreserveAspectFit
+      fillMode: frame.fillMode
       visible: status === Image.Ready
+      onStatusChanged: {
+        if (status === Image.Ready && !frame.frontIsA) {
+          imgA.z = 2
+          imgB.z = 1
+          frame.frontIsA = true
+        }
+      }
     }
 
     Image {
@@ -933,12 +1186,19 @@ Item {
       anchors.fill: parent
       cache: false
       asynchronous: true
-      fillMode: Image.PreserveAspectFit
+      fillMode: frame.fillMode
       visible: status === Image.Ready
+      onStatusChanged: {
+        if (status === Image.Ready && frame.frontIsA) {
+          imgB.z = 2
+          imgA.z = 1
+          frame.frontIsA = false
+        }
+      }
     }
 
     Timer {
-      interval: Math.max(50, Math.floor(1000 / Math.max(1, frame.fps)))
+      interval: Math.max(30, Math.floor(1000 / Math.max(1, frame.fps)))
       repeat: true
       running: window.visible && frame.baseUrl !== "" && frame.fps > 0
       onTriggered: frame.bump()
@@ -950,6 +1210,10 @@ Item {
 
     onBaseUrlChanged: {
       if (baseUrl !== "") bump()
+    }
+
+    onFpsChanged: {
+      if (baseUrl !== "" && fps > 0) bump()
     }
   }
 

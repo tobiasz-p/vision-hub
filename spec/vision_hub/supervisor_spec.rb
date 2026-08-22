@@ -8,7 +8,7 @@ RSpec.describe VisionHub::Supervisor do
       cameras: cameras, runtime_dir: '/run/vision-hub', secrets: secrets,
       fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
       probe_interval: probe_interval, logger: nil,
-      build_pump: build_pump, probe_runner: probe_runner
+      build_pump: build_pump, audio_pump_builder: audio_pump_builder, probe_runner: probe_runner
     )
   end
 
@@ -29,6 +29,14 @@ RSpec.describe VisionHub::Supervisor do
     lambda do |kwargs|
       fake = Fakes::Pump.new(kwargs)
       pumps_by_id_role[[kwargs[:camera].id, kwargs[:role]]] = fake
+      fake
+    end
+  end
+  let(:audio_pumps) { [] }
+  let(:audio_pump_builder) do
+    lambda do |kwargs|
+      fake = Fakes::Pump.new(kwargs)
+      audio_pumps << fake
       fake
     end
   end
@@ -169,6 +177,20 @@ RSpec.describe VisionHub::Supervisor do
 
       expect(pumps_by_id_role[['front', :main]].kwargs[:fps]).to eq(15)
     end
+
+    it 'accepts custom fps in focus command' do
+      supervisor.handle({ 'cmd' => 'focus', 'camera' => 'front', 'fps' => 25 }, now: 10)
+
+      expect(pumps_by_id_role[['front', :main]].kwargs[:fps]).to eq(25)
+    end
+
+    it 'updates running stream dynamically on set_fps' do
+      supervisor.handle({ 'cmd' => 'focus', 'camera' => 'front' }, now: 10)
+      expect(pumps_by_id_role[['front', :main]].kwargs[:fps]).to eq(15)
+
+      supervisor.handle({ 'cmd' => 'set_fps', 'fps' => 30 }, now: 12)
+      expect(pumps_by_id_role[['front', :main]].kwargs[:fps]).to eq(30)
+    end
   end
 
   describe '#shutdown' do
@@ -216,6 +238,14 @@ RSpec.describe VisionHub::Supervisor do
       supervisor.handle({ 'cmd' => 'explode' }, now: 1)
 
       expect(supervisor.drain_outbox.last).to include(event: :error, message: include('explode'))
+    end
+
+    it 'toggles audio playback on and off' do
+      supervisor.handle({ 'cmd' => 'audio', 'camera' => 'front', 'enabled' => true }, now: 1)
+      expect(audio_pumps.last&.running?).to be(true)
+
+      supervisor.handle({ 'cmd' => 'audio', 'camera' => 'front', 'enabled' => false }, now: 2)
+      expect(audio_pumps.last&.running?).to be(false)
     end
   end
 end

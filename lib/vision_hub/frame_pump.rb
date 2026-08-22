@@ -26,9 +26,7 @@ module VisionHub
     attr_reader :camera, :role, :fps, :hwaccel, :input_strategy, :status, :last_error
 
     def initialize(camera:, role:, runtime_dir:, fps:, hwaccel:,
-                   input_strategy: :argv, secrets: nil, logger: nil,
-                   spawner: ChildProcess.method(:spawn),
-                   reaper: ChildProcess.method(:reap), killer: ChildProcess.method(:kill))
+                   input_strategy: :argv, secrets: nil, logger: nil, **process_io)
       raise ArgumentError, "unknown role #{role.inspect}" unless ROLES.include?(role)
 
       @camera = camera
@@ -39,9 +37,9 @@ module VisionHub
       @input_strategy = input_strategy
       @secrets = secrets
       @logger = logger
-      @spawner = spawner
-      @reaper = reaper
-      @killer = killer
+      @spawner = process_io[:spawner] || ChildProcess.method(:spawn)
+      @reaper = process_io[:reaper] || ChildProcess.method(:reap)
+      @killer = process_io[:killer] || ChildProcess.method(:kill)
       reset_process_state
       @wanted = false
     end
@@ -67,24 +65,31 @@ module VisionHub
 
     def start(now: Clock.now)
       @wanted = true
+      @last_error = nil
+      @attempts = 0
       # Backoff and in-flight stops are owned by tick(); spawning over them
       # would defeat the retry schedule.
       return if %i[running stopping backoff].include?(status)
 
-      @attempts = 0 if %i[idle stopped].include?(status)
       attempt_spawn(now)
     end
 
     # Marked unwanted; actual teardown happens across ticks so the event loop
-    # never blocks longer than one signal send.
-    def stop(now: Clock.now)
+    # never blocks longer than one signal send. If immediate is true, signals
+    # KILL directly so RTSP sockets release instantaneously.
+    def stop(now: Clock.now, immediate: false)
       @wanted = false
       @next_action_at = nil
       return unless @pid
 
-      @status = :stopping
-      @stop_deadline = now + STOP_GRACE
-      signal('TERM')
+      if immediate
+        signal('KILL')
+        reap_child(now)
+      else
+        @status = :stopping
+        @stop_deadline = now + STOP_GRACE
+        signal('TERM')
+      end
     end
 
     def tick(now: Clock.now)

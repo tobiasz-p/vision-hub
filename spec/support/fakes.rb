@@ -47,9 +47,9 @@ module Fakes
       end
     end
 
-    def stop(now:)
+    def stop(now:, immediate: false)
       @running = false
-      @events << [:stop, now]
+      @events << [:stop, now, immediate]
       fire(event: :exited, code: 0, intentional: true, error: nil)
     end
 
@@ -58,6 +58,10 @@ module Fakes
     def running? = @running
 
     def status = @running ? :running : :idle
+
+    def fps = @kwargs[:fps]
+
+    def quality = @kwargs[:quality]
 
     def last_error = nil
 

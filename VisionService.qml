@@ -33,7 +33,7 @@ Item {
 
   // ---- daemon knobs (pushed by the bar widget's settings) --------------------
   property int subFps: 5
-  property int mainFps: 10
+  property int mainFps: 15
   property bool hwaccel: true
   property string inputStrategy: "argv"
   readonly property string argSignature:
@@ -89,16 +89,37 @@ Item {
     return true
   }
 
-  function focusCamera(cameraId) {
-    send({ cmd: "focus", camera: cameraId })
+  property bool audioEnabled: false
+
+  function focusCamera(cameraId, fps) {
+    var targetFps = fps !== undefined ? fps : root.mainFps
+    root.audioEnabled = false
+    send({ cmd: "focus", camera: cameraId, fps: targetFps })
+  }
+
+  function setMainFps(fps) {
+    if (fps !== undefined && isFinite(fps)) root.mainFps = fps
+    send({ cmd: "set_fps", fps: root.mainFps })
+  }
+
+  function toggleAudio(cameraId) {
+    root.audioEnabled = !root.audioEnabled
+    send({ cmd: "audio", camera: cameraId, enabled: root.audioEnabled })
+    return root.audioEnabled
+  }
+
+  function setAudio(enabled, cameraId) {
+    root.audioEnabled = enabled === true
+    send({ cmd: "audio", camera: cameraId, enabled: root.audioEnabled })
   }
 
   function unfocusCamera() {
+    root.audioEnabled = false
     send({ cmd: "unfocus" })
   }
 
-  function focus(cameraId) {
-    focusCamera(cameraId)
+  function focus(cameraId, fps) {
+    focusCamera(cameraId, fps)
   }
 
   function unfocus() {
