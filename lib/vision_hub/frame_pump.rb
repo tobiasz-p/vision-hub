@@ -77,17 +77,17 @@ module VisionHub
 
     # Marked unwanted; actual teardown happens across ticks so the event loop
     # never blocks longer than one signal send. If immediate is true, signals
-    # KILL directly so RTSP sockets release instantaneously.
     def stop(now: Clock.now, immediate: false)
       @wanted = false
       @next_action_at = nil
       return unless @pid
 
+      @status = :stopping
       if immediate
-        signal('KILL')
+        @kill_deadline = now + KILL_GRACE
+        signal("KILL")
         reap_child(now)
       else
-        @status = :stopping
         @stop_deadline = now + STOP_GRACE
         signal('TERM')
       end
@@ -98,7 +98,7 @@ module VisionHub
       drain_stderr if @stderr_io
       case status
       when :stopping then advance_stop(now)
-      when :backoff, :unconfigured then attempt_spawn(now) if @next_action_at && now >= @next_action_at
+      when :backoff, :unconfigured then attempt_spawn(now) if retry_due?(now)
       end
       check_stability(now)
       drop_stale_playlist
@@ -108,15 +108,15 @@ module VisionHub
 
     def build_argv(url)
       argv = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning']
-      argv += ['-fflags', '+genpts+discardcorrupt', '-flags', 'low_delay']
+      argv += ['-fflags', '+genpts+discardcorrupt+nobuffer', '-flags', 'low_delay']
       argv += ['-hwaccel', 'auto'] if @hwaccel
       argv += input_argv(url)
       if @role == :sub
-        argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=640:-1",
-                '-q:v', '6', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
+        argv + ['-an', '-sn', '-dn', '-vf', 'scale=640:-1', '-frames:v', '1',
+                '-q:v', '6', '-atomic_writing', '1', '-y', frame_path]
       else
-        video_out = ['-map', '0:v:0', '-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1280:-1",
-                     '-q:v', '6', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
+        video_out = ['-map', '0:v:0', '-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1920:-1",
+                     '-q:v', '4', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
         if @audio
           audio_out = ['-map', '0:a:0?', '-vn', '-sn', '-dn',
                        '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2',
@@ -130,10 +130,15 @@ module VisionHub
 
     private
 
+    def retry_due?(now)
+      @wanted && @next_action_at && now >= @next_action_at
+    end
+
     def input_argv(url)
       case @input_strategy
       when :argv
-        ['-rtsp_transport', 'tcp', '-timeout', FramePump::RTSP_TIMEOUT_US.to_s, '-i', url]
+        ['-rtsp_transport', 'tcp', '-timeout', FramePump::RTSP_TIMEOUT_US.to_s,
+         '-probesize', '128000', '-analyzeduration', '200000', '-i', url]
       when :concat_file
         write_playlist(url)
         ['-f', 'concat', '-safe', '0', '-i', playlist_path]
@@ -217,6 +222,10 @@ module VisionHub
       log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? 'stopped' : 'died'})")
       if intentional
         finish_intentional(exit_code, now)
+      elsif @role == :sub && exit_code.zero?
+        close_child
+        @status = :stopped
+        emit(event: :exited, code: exit_code, intentional: true, error: nil)
       else
         finish_crashed(exit_code, now)
       end
@@ -237,8 +246,8 @@ module VisionHub
       close_child
       @attempts += 1
       @last_error = compose_error(exit_code, detail) if detail
-      @status = :backoff
-      schedule_retry(now)
+      @status = @wanted ? :backoff : :stopped
+      schedule_retry(now) if @wanted
       emit(event: :exited, code: exit_code, intentional: false, error: @last_error)
     end
 
@@ -254,7 +263,7 @@ module VisionHub
 
     def advance_stop(now)
       deadline = @kill_deadline || @stop_deadline
-      return unless @pid && now >= deadline
+      return unless @pid && deadline && now >= deadline
 
       if @kill_deadline.nil?
         log(:warn, "pid #{@pid} ignored TERM; sending KILL")

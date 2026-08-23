@@ -21,7 +21,6 @@ Item {
   property bool patrolMode: false
   property int streamFps: visionService ? visionService.mainFps : 15
   property bool fpsDropdownOpen: false
-  property bool fillAspect: false
   readonly property bool isAudioOn: visionService ? visionService.audioEnabled : false
 
   readonly property var fpsOptions: [5, 10, 15, 20, 25, 30]
@@ -124,7 +123,8 @@ Item {
   FloatingWindow {
     id: window
 
-    title: "VisionHub" + (root.focusedId !== "" ? " — " + root.focusedId : "")
+    readonly property var focusedState: root.visionService ? root.visionService.stateFor(root.focusedId) : null
+    title: "VisionHub" + (root.focusedId !== "" ? " — " + (focusedState && focusedState.name ? focusedState.name : root.focusedId) : "")
     color: Color.background
     implicitWidth: 1120
     implicitHeight: 740
@@ -145,6 +145,16 @@ Item {
       id: windowContent
       anchors.fill: parent
       focus: true
+
+      Shortcut {
+        sequence: StandardKey.Close
+        onActivated: root.requestClose()
+      }
+
+      Shortcut {
+        sequence: "Ctrl+W"
+        onActivated: root.requestClose()
+      }
 
       Keys.onEscapePressed: {
         if (root.focusedId !== "") root.showGrid()
@@ -175,9 +185,6 @@ Item {
             root.visionService.toggleAudio(root.focusedId)
           }
           event.accepted = true
-        } else if ((event.key === Qt.Key_A || event.text === "a" || event.text === "A") && root.focusedId !== "") {
-          root.fillAspect = !root.fillAspect
-          event.accepted = true
         }
       }
 
@@ -204,6 +211,7 @@ Item {
 
         // Left Header Section (Brand & Status)
         Row {
+          id: leftBrandRow
           anchors.left: parent.left
           anchors.leftMargin: Style.space(16)
           anchors.verticalCenter: parent.verticalCenter
@@ -211,7 +219,6 @@ Item {
 
           // Brand Glyph Box (Themed)
           Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
             width: 36
             height: 36
             radius: 10
@@ -229,21 +236,21 @@ Item {
 
           // Brand Title & Info
           Column {
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 1
+            spacing: 2
 
             Row {
+              id: brandRow
               spacing: 4
               Text {
                 text: "VISION"
-                font.pixelSize: 13
+                font.pixelSize: 14
                 font.bold: true
                 font.letterSpacing: 1.2
                 color: Color.foreground
               }
               Text {
                 text: "HUB"
-                font.pixelSize: 13
+                font.pixelSize: 14
                 font.bold: true
                 font.letterSpacing: 1.2
                 color: Color.accent
@@ -251,7 +258,7 @@ Item {
             }
 
             Text {
-              text: root.focusedId !== "" ? "STREAM · " + root.focusedId.toUpperCase() : root.onlineCount + "/" + root.totalCount + " CAMERAS ONLINE"
+              text: root.focusedId !== "" ? "STREAM · " + (focusedState && focusedState.name ? focusedState.name.toUpperCase() : root.focusedId.toUpperCase()) : root.onlineCount + "/" + root.totalCount + " CAMERAS ONLINE"
               font.pixelSize: 10
               font.bold: true
               font.letterSpacing: 0.5
@@ -261,9 +268,10 @@ Item {
 
           // Live / Status Capsule (Healthy Green / Alert Red)
           Rectangle {
+            visible: headerBar.width >= 820
             anchors.verticalCenter: parent.verticalCenter
             height: 24
-            width: liveRow.implicitWidth + 16
+            width: liveRow.implicitWidth + 18
             radius: 12
             color: {
               if (root.focusedId !== "") return Qt.rgba(16 / 255, 185 / 255, 129 / 255, 0.18)
@@ -307,140 +315,105 @@ Item {
                 font.bold: true
                 font.letterSpacing: 0.4
                 color: root.focusedId !== "" || root.onlineCount === root.totalCount ? "#34d399" : Color.urgent
+                verticalAlignment: Text.AlignVCenter
               }
             }
           }
         }
 
-        // Center Section: View Mode & Camera Switcher Tabs
-        Row {
-          anchors.centerIn: parent
-          spacing: 8
+        // Center Section: View Mode Switcher
+        Rectangle {
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.verticalCenter: parent.verticalCenter
+          height: 34
+          width: segRow.implicitWidth + 8
+          radius: 17
+          color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
+          border.width: 1
+          border.color: Color.popups.border
+          visible: headerBar.width > 680
 
-          // Grid vs Focus Segmented Switcher (Themed)
-          Rectangle {
-            height: 34
-            width: segRow.implicitWidth + 6
-            radius: 17
-            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-            border.width: 1
-            border.color: Color.popups.border
-
-            Row {
-              id: segRow
-              anchors.centerIn: parent
-              spacing: 3
-
-              // Grid Tab
-              Rectangle {
-                width: 76
-                height: 28
-                radius: 14
-                color: root.focusedId === "" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (gridTabHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
-                border.width: root.focusedId === "" ? 1 : 0
-                border.color: Color.accent
-
-                Row {
-                  anchors.centerIn: parent
-                  spacing: 5
-                  Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "󰕰"
-                    font.pixelSize: 12
-                    color: root.focusedId === "" ? Color.accent : Color.muted
-                  }
-                  Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Grid"
-                    font.pixelSize: 11
-                    font.bold: root.focusedId === ""
-                    color: root.focusedId === "" ? Color.foreground : Color.muted
-                  }
-                }
-
-                MouseArea {
-                  id: gridTabHover
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.showGrid()
-                }
-              }
-
-              // Cinema Focus Tab
-              Rectangle {
-                width: 84
-                height: 28
-                radius: 14
-                color: root.focusedId !== "" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (focusTabHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
-                border.width: root.focusedId !== "" ? 1 : 0
-                border.color: Color.accent
-
-                Row {
-                  anchors.centerIn: parent
-                  spacing: 5
-                  Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "󰍉"
-                    font.pixelSize: 12
-                    color: root.focusedId !== "" ? Color.accent : Color.muted
-                  }
-                  Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Cinema"
-                    font.pixelSize: 11
-                    font.bold: root.focusedId !== ""
-                    color: root.focusedId !== "" ? Color.foreground : Color.muted
-                  }
-                }
-
-                MouseArea {
-                  id: focusTabHover
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    if (root.focusedId === "" && root.cameraList.length > 0) {
-                      root.showFocused(root.cameraList[0])
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          // Header Camera Quick Selectors (Themed)
           Row {
-            visible: root.focusedId !== "" && root.totalCount > 1
-            anchors.verticalCenter: parent.verticalCenter
+            id: segRow
+            anchors.centerIn: parent
             spacing: 4
 
-            Repeater {
-              model: root.cameraList
-              delegate: Rectangle {
-                required property string modelData
-                readonly property bool isCur: root.focusedId === modelData
-                width: 48
-                height: 28
-                radius: 14
-                color: isCur ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (tabCamHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.04))
-                border.width: 1
-                border.color: isCur ? Color.accent : Color.popups.border
+            // Grid Tab
+            Rectangle {
+              width: 76
+              height: 28
+              radius: 14
+              color: root.focusedId === "" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (gridTabHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
+              border.width: root.focusedId === "" ? 1 : 0
+              border.color: Color.accent
 
+              Row {
+                anchors.centerIn: parent
+                spacing: 6
                 Text {
-                  anchors.centerIn: parent
-                  text: parent.modelData
-                  font.pixelSize: 11
-                  font.bold: parent.isCur
-                  color: parent.isCur ? Color.accent : Color.muted
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "󰕰"
+                  font.pixelSize: 12
+                  color: root.focusedId === "" ? Color.accent : Color.muted
+                  verticalAlignment: Text.AlignVCenter
                 }
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "Grid"
+                  font.pixelSize: 11
+                  font.bold: root.focusedId === ""
+                  color: root.focusedId === "" ? Color.foreground : Color.muted
+                  verticalAlignment: Text.AlignVCenter
+                }
+              }
 
-                MouseArea {
-                  id: tabCamHover
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.showFocused(parent.modelData)
+              MouseArea {
+                id: gridTabHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.showGrid()
+              }
+            }
+
+            // Cinema Focus Tab
+            Rectangle {
+              width: 84
+              height: 28
+              radius: 14
+              color: root.focusedId !== "" ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (focusTabHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : "transparent")
+              border.width: root.focusedId !== "" ? 1 : 0
+              border.color: Color.accent
+
+              Row {
+                anchors.centerIn: parent
+                spacing: 6
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "󰍉"
+                  font.pixelSize: 12
+                  color: root.focusedId !== "" ? Color.accent : Color.muted
+                  verticalAlignment: Text.AlignVCenter
+                }
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "Cinema"
+                  font.pixelSize: 11
+                  font.bold: root.focusedId !== ""
+                  color: root.focusedId !== "" ? Color.foreground : Color.muted
+                  verticalAlignment: Text.AlignVCenter
+                }
+              }
+
+              MouseArea {
+                id: focusTabHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  if (root.focusedId === "" && root.cameraList.length > 0) {
+                    root.showFocused(root.cameraList[0])
+                  }
                 }
               }
             }
@@ -485,6 +458,8 @@ Item {
                     font.pixelSize: 10
                     font.bold: root.columns === parent.modelData
                     color: root.columns === parent.modelData ? Color.background : Color.foreground
+                    verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignHCenter
                   }
 
                   MouseArea {
@@ -510,7 +485,7 @@ Item {
             Rectangle {
               id: fpsBtnRect
               height: 32
-              width: fpsBtnRow.implicitWidth + 18
+              width: fpsBtnRow.implicitWidth + 20
               radius: 16
               color: root.fpsDropdownOpen ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22) : (fpsBtnHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
               border.width: 1
@@ -519,13 +494,14 @@ Item {
               Row {
                 id: fpsBtnRow
                 anchors.centerIn: parent
-                spacing: 5
+                spacing: 6
 
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
                   text: "󰑖"
-                  font.pixelSize: 11
+                  font.pixelSize: 12
                   color: Color.accent
+                  verticalAlignment: Text.AlignVCenter
                 }
 
                 Text {
@@ -534,6 +510,7 @@ Item {
                   font.pixelSize: 11
                   font.bold: true
                   color: Color.foreground
+                  verticalAlignment: Text.AlignVCenter
                 }
 
                 Text {
@@ -541,6 +518,7 @@ Item {
                   text: root.fpsDropdownOpen ? "▴" : "▾"
                   font.pixelSize: 10
                   color: Color.muted
+                  verticalAlignment: Text.AlignVCenter
                 }
               }
 
@@ -593,6 +571,7 @@ Item {
                         font.pixelSize: 11
                         font.bold: fpsOptionItem.isSelected
                         color: fpsOptionItem.isSelected ? Color.accent : Color.foreground
+                        verticalAlignment: Text.AlignVCenter
                       }
 
                       Text {
@@ -602,6 +581,7 @@ Item {
                         font.pixelSize: 10
                         font.bold: true
                         color: Color.accent
+                        verticalAlignment: Text.AlignVCenter
                       }
                     }
 
@@ -629,7 +609,7 @@ Item {
             visible: root.focusedId !== ""
             anchors.verticalCenter: parent.verticalCenter
             height: 32
-            width: audioBtnRow.implicitWidth + 18
+            width: headerBar.width < 900 ? 32 : audioBtnRow.implicitWidth + 20
             radius: 16
             color: root.isAudioOn ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (audioHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
             border.width: 1
@@ -645,14 +625,17 @@ Item {
                 text: root.isAudioOn ? "󰕾" : "󰕿"
                 font.pixelSize: 13
                 color: root.isAudioOn ? Color.accent : Color.muted
+                verticalAlignment: Text.AlignVCenter
               }
 
               Text {
+                visible: headerBar.width >= 900
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.isAudioOn ? "Audio ON" : "Muted"
                 font.pixelSize: 11
                 font.bold: root.isAudioOn
-                color: root.isAudioOn ? Color.foreground : Color.foreground
+                color: Color.foreground
+                verticalAlignment: Text.AlignVCenter
               }
             }
 
@@ -669,53 +652,12 @@ Item {
             }
           }
 
-          // Aspect Ratio (Fit / Fill) Toggle (in cinema view)
-          Rectangle {
-            visible: root.focusedId !== ""
-            anchors.verticalCenter: parent.verticalCenter
-            height: 32
-            width: aspectBtnRow.implicitWidth + 18
-            radius: 16
-            color: root.fillAspect ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (aspectHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
-            border.width: 1
-            border.color: root.fillAspect ? Color.accent : Color.popups.border
-
-            Row {
-              id: aspectBtnRow
-              anchors.centerIn: parent
-              spacing: 6
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.fillAspect ? "󰘕" : "󰊓"
-                font.pixelSize: 12
-                color: root.fillAspect ? Color.accent : Color.muted
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.fillAspect ? "Fill" : "Fit"
-                font.pixelSize: 11
-                font.bold: root.fillAspect
-                color: root.fillAspect ? Color.foreground : Color.foreground
-              }
-            }
-
-            MouseArea {
-              id: aspectHover
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.fillAspect = !root.fillAspect
-            }
-          }
-
           // Patrol Mode Toggle (Themed)
           Rectangle {
             visible: root.focusedId !== "" && root.totalCount > 1
             anchors.verticalCenter: parent.verticalCenter
             height: 32
-            width: patrolRow.implicitWidth + 18
+            width: headerBar.width < 900 ? 32 : patrolRow.implicitWidth + 20
             radius: 16
             color: root.patrolMode ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25) : (patrolHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05))
             border.width: 1
@@ -731,13 +673,16 @@ Item {
                 text: "󰑖"
                 font.pixelSize: 12
                 color: root.patrolMode ? Color.accent : Color.muted
+                verticalAlignment: Text.AlignVCenter
               }
               Text {
+                visible: headerBar.width >= 900
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Patrol"
                 font.pixelSize: 11
                 font.bold: root.patrolMode
-                color: root.patrolMode ? Color.foreground : Color.foreground
+                color: Color.foreground
+                verticalAlignment: Text.AlignVCenter
               }
             }
 
@@ -747,73 +692,6 @@ Item {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: root.patrolMode = !root.patrolMode
-            }
-          }
-
-          // Refresh Button (Themed)
-          Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
-            height: 32
-            width: refreshBtnRow.implicitWidth + 18
-            radius: 16
-            color: refreshHover.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-            border.width: 1
-            border.color: Color.popups.border
-
-            Row {
-              id: refreshBtnRow
-              anchors.centerIn: parent
-              spacing: 6
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "󰑐"
-                font.pixelSize: 12
-                color: Color.accent
-              }
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Refresh"
-                font.pixelSize: 11
-                font.bold: true
-                color: Color.foreground
-              }
-            }
-
-            MouseArea {
-              id: refreshHover
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                if (root.visionService) root.visionService.refresh()
-              }
-            }
-          }
-
-          // Close Button
-          Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
-            width: 32
-            height: 32
-            radius: 16
-            color: closeHover.containsMouse ? Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.25) : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
-            border.width: 1
-            border.color: closeHover.containsMouse ? Color.urgent : Color.popups.border
-
-            Text {
-              anchors.centerIn: parent
-              text: "✕"
-              font.pixelSize: 12
-              color: closeHover.containsMouse ? Color.urgent : Color.muted
-            }
-
-            MouseArea {
-              id: closeHover
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.requestClose()
             }
           }
         }
@@ -850,7 +728,7 @@ Item {
                 anchors.bottomMargin: Style.space(88)
                 cameraId: root.focusedId
                 fps: root.streamFps
-                fillMode: root.fillAspect ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                fillMode: Image.PreserveAspectFit
                 baseUrl: root.visionService ? root.visionService.frameUrl(root.focusedId) : ""
                 state: root.visionService ? root.visionService.stateFor(root.focusedId) : null
               }
@@ -883,11 +761,12 @@ Item {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.focusedId.toUpperCase() + " · LIVE RTSP"
+                    text: (focusedFrame.state && focusedFrame.state.name ? focusedFrame.state.name.toUpperCase() : root.focusedId.toUpperCase()) + " · LIVE RTSP"
                     font.pixelSize: 11
                     font.bold: true
                     font.letterSpacing: 0.5
                     color: Color.foreground
+                    verticalAlignment: Text.AlignVCenter
                   }
 
                   Rectangle {
@@ -903,6 +782,7 @@ Item {
                     font.pixelSize: 10
                     font.bold: true
                     color: Color.accent
+                    verticalAlignment: Text.AlignVCenter
                   }
 
                   Rectangle {
@@ -920,6 +800,7 @@ Item {
                     font.pixelSize: 10
                     font.bold: true
                     color: "#10b981"
+                    verticalAlignment: Text.AlignVCenter
                   }
                 }
               }
@@ -941,10 +822,11 @@ Item {
 
                 Text {
                   anchors.centerIn: parent
-                  text: "‹"
+                  text: "󰅁"
                   font.pixelSize: 24
-                  font.bold: true
                   color: prevHover.containsMouse ? Color.accent : Color.foreground
+                  verticalAlignment: Text.AlignVCenter
+                  horizontalAlignment: Text.AlignHCenter
                 }
 
                 MouseArea {
@@ -972,10 +854,11 @@ Item {
 
                 Text {
                   anchors.centerIn: parent
-                  text: "›"
+                  text: "󰅂"
                   font.pixelSize: 24
-                  font.bold: true
                   color: nextHover.containsMouse ? Color.accent : Color.foreground
+                  verticalAlignment: Text.AlignVCenter
+                  horizontalAlignment: Text.AlignHCenter
                 }
 
                 MouseArea {
@@ -1031,13 +914,16 @@ Item {
                           color: cameraThumbItem.isSelected ? Color.accent : Color.muted
                         }
 
+                        readonly property var itemState: root.visionService ? root.visionService.stateFor(cameraThumbItem.modelData) : null
+
                         Text {
                           anchors.verticalCenter: parent.verticalCenter
-                          text: cameraThumbItem.modelData.toUpperCase()
+                          text: itemState && itemState.name ? itemState.name : cameraThumbItem.modelData.toUpperCase()
                           font.pixelSize: 11
                           font.bold: true
                           font.letterSpacing: 0.5
                           color: cameraThumbItem.isSelected ? Color.accent : Color.foreground
+                          verticalAlignment: Text.AlignVCenter
                         }
                       }
 
@@ -1162,9 +1048,13 @@ Item {
       frame.tick += 1
       var nextUrl = baseUrl + "?t=" + frame.tick
       if (frame.frontIsA) {
-        imgB.source = nextUrl
+        if (imgB.status !== Image.Loading) {
+          imgB.source = nextUrl
+        }
       } else {
-        imgA.source = nextUrl
+        if (imgA.status !== Image.Loading) {
+          imgA.source = nextUrl
+        }
       }
     }
 
@@ -1303,7 +1193,7 @@ Item {
       anchors.left: parent.left
       anchors.margins: 10
       height: 26
-      width: nameRow.implicitWidth + 18
+      width: nameRow.implicitWidth + 20
       radius: 13
       color: Color.popups.background
       border.width: 1
@@ -1313,22 +1203,24 @@ Item {
       Row {
         id: nameRow
         anchors.centerIn: parent
-        spacing: 5
+        spacing: 6
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: "󰹗"
           font.pixelSize: 12
           color: Color.accent
+          verticalAlignment: Text.AlignVCenter
         }
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          text: tile.cameraId.toUpperCase()
+          text: (tile.state && tile.state.name ? tile.state.name : tile.cameraId).toUpperCase()
           color: Color.foreground
           font.pixelSize: 11
           font.bold: true
           font.letterSpacing: 0.5
+          verticalAlignment: Text.AlignVCenter
         }
       }
     }
@@ -1339,7 +1231,7 @@ Item {
       anchors.right: parent.right
       anchors.margins: 10
       height: 26
-      width: tileStatusRow.implicitWidth + 18
+      width: tileStatusRow.implicitWidth + 20
       radius: 13
       color: Color.popups.background
       border.width: 1
@@ -1366,6 +1258,7 @@ Item {
           font.bold: true
           font.letterSpacing: 0.5
           color: "#34d399"
+          verticalAlignment: Text.AlignVCenter
         }
       }
     }
@@ -1392,6 +1285,7 @@ Item {
           text: "󰍉"
           font.pixelSize: 14
           color: Color.accent
+          verticalAlignment: Text.AlignVCenter
         }
 
         Text {
@@ -1400,6 +1294,7 @@ Item {
           font.pixelSize: 12
           font.bold: true
           color: Color.foreground
+          verticalAlignment: Text.AlignVCenter
         }
       }
     }

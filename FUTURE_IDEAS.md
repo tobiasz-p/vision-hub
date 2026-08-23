@@ -24,9 +24,9 @@ This document collects enhancement ideas, layout explorations, and architectural
 - **Unified Schema Defaults**:
   - Automatic injection of `manifest.json` schema defaults directly into service and panel state without requiring explicit duplicate fallback definitions in QML.
 - **Per-Camera Overrides in `cameras.json`**:
-  - Custom FPS, hardware acceleration flag, or custom stream paths per camera (e.g. higher FPS for gate/driveway, lower for garden).
+  - Custom FPS, hardware acceleration flag, custom stream paths, and custom location alias names per camera.
 - **Settings GUI Modal**:
-  - Interactive settings panel within VisionApp to adjust FPS, grid layout, hardware acceleration, and audio preferences without CLI commands.
+  - Interactive settings panel within VisionApp to adjust FPS, grid layout, hardware acceleration, camera names, and audio preferences without CLI commands.
 
 ---
 
@@ -40,3 +40,14 @@ This document collects enhancement ideas, layout explorations, and architectural
   - On-screen directional arrows and keyboard shortcuts (<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>+</kbd><kbd>-</kbd>) to send ONVIF / RTSP PTZ commands to supported cameras.
 - **Motion & Alert Integration**:
   - Visual border highlight (e.g. pulsing Amber/Red) when motion or line-crossing is detected via camera events or webhook integration.
+
+---
+
+## 4. UI & Visual Polish
+
+- **Pixel-Perfect Alignment & Typography**:
+  - Fine-tune icon-to-text vertical centering across Nerd Font glyphs, badges, and headers.
+  - Standardize button padding, pill margins, and icon baseline offsets across all viewport sizes.
+  - Polish floating control toolbar and bottom camera dock margins.
+- **Aspect Ratio Fit vs Fill (Crop) Mode**:
+  - Optional toggle to switch between clean pillarbox/letterbox aspect fit and cropped full-bleed view with anamorphic support.

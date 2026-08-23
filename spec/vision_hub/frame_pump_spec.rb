@@ -86,22 +86,22 @@ RSpec.describe VisionHub::FramePump do
       expect(argv).not_to include('-f')
     end
 
-    it 'targets continuous streaming with low fps and scale for sub role' do
+    it 'targets snapshot mode for sub role' do
       argv = pump.build_argv('rtsp://u:p@h/s')
 
       expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
-      expect(argv).to include('-update', '1', '-y', '-atomic_writing', '1')
-      expect(argv[argv.index('-vf') + 1]).to eq('fps=5,scale=640:-1')
+      expect(argv).to include('-frames:v', '1', '-y', '-atomic_writing', '1')
+      expect(argv[argv.index('-vf') + 1]).to eq('scale=640:-1')
       expect(argv).to include('-hwaccel', 'auto')
     end
 
-    it 'targets continuous streaming for main role with configured fps' do
+    it 'targets continuous streaming for main role with configured fps and 1080p resolution' do
       main_pump = build_pump(role: :main, fps: 20, hwaccel: true, input_strategy: :argv, secrets: secrets)
       argv = main_pump.build_argv('rtsp://u:p@h/s')
 
       expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
       expect(argv).to include('-update', '1', '-atomic_writing', '1', '-y')
-      expect(argv[argv.index('-vf') + 1]).to eq('fps=20,scale=1280:-1')
+      expect(argv[argv.index('-vf') + 1]).to eq('fps=20,scale=1920:-1')
       expect(argv).to include('-hwaccel', 'auto')
     end
 
@@ -196,6 +196,22 @@ RSpec.describe VisionHub::FramePump do
 
       exits[pid] = 9
       pump.tick(now: 201)
+      expect(pump.status).to eq(:stopped)
+    end
+
+    it "sends KILL immediately when requested and stops without comparing nil deadline" do
+      pump.start(now: 100)
+      pid = pid_counter[0]
+      pump.stop(now: 100, immediate: true)
+
+      expect(signals.last).to eq([-pid, "KILL"])
+      expect(pump.status).to eq(:stopping)
+
+      pump.tick(now: 100.5)
+      expect(pump.status).to eq(:stopping)
+
+      exits[pid] = 9
+      pump.tick(now: 100.8)
       expect(pump.status).to eq(:stopped)
     end
   end

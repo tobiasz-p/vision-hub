@@ -44,7 +44,7 @@ module VisionHub
       @now = now
       @probe_due = Hash.new(0.0)
       @round_robin = @cameras.map(&:id).cycle
-      @states = @cameras.to_h { |c| [c.id, { id: c.id, online: nil, streaming: false, error: nil }] }
+      @states = @cameras.to_h { |c| [c.id, { id: c.id, name: c.name, online: nil, streaming: false, error: nil }] }
       @pumps = @cameras.to_h { |c| [c.id, { sub: new_pump(c, :sub), main: nil }] }
       @pumps.each_value { |entry| entry[:sub].start(now: now) }
       emit(:hello, cameras: @cameras.map(&:id))
@@ -151,16 +151,16 @@ module VisionHub
 
     # ---- probing ----
 
+    def current_probe_interval
+      @window_open && !@focused_id ? 1.0 : @probe_interval
+    end
+
     def run_due_probe
       id = @round_robin.next
       return if @now < @probe_due[id]
 
-      @probe_due[id] = @now + @probe_interval
       camera = @cameras.find { |c| c.id == id }
-      result = @probe_runner.call(camera)
-      was_online = @states[id][:online]
-      @states[id][:online] = result == :online
-      publish_changes if was_online != @states[id][:online]
+      refresh_camera(camera) if camera
     rescue StopIteration
       nil
     end
@@ -174,7 +174,7 @@ module VisionHub
       result = @probe_runner.call(camera)
       was_online = @states[camera.id][:online]
       @states[camera.id][:online] = result == :online
-      @probe_due[camera.id] = @now + @probe_interval
+      @probe_due[camera.id] = @now + current_probe_interval
       publish_changes if was_online != @states[camera.id][:online]
       @pumps.dig(camera.id, :sub)&.start(now: @now) if result == :online && @window_open && !@focused_id
     end
@@ -211,12 +211,24 @@ module VisionHub
     end
 
     def start_focus(camera, target_fps, target_audio)
-      unfocus(immediate: true)
-      @pumps.each_value { |entry| entry[:sub]&.stop(now: @now, immediate: true) }
+      stop_current_focus(immediate: true)
       @focused_id = camera.id
+      @pumps[camera.id][:sub]&.stop(now: @now, immediate: true)
       main = new_pump(camera, :main, fps: target_fps, audio: target_audio)
       @pumps[camera.id][:main] = main
       main.start(now: @now)
+    end
+
+    def stop_current_focus(immediate: false)
+      return unless @focused_id
+
+      prev_id = @focused_id
+      @audio_enabled = false
+      entry = @pumps[prev_id]
+      entry[:main]&.stop(now: @now, immediate: immediate)
+      entry[:main] = nil
+      @focused_id = nil
+      entry[:sub]&.start(now: @now) if @window_open
     end
 
     def matching_focus?(camera_id, target_fps, target_audio)
@@ -236,14 +248,7 @@ module VisionHub
     end
 
     def unfocus(immediate: false)
-      return unless @focused_id
-
-      @audio_enabled = false
-      entry = @pumps[@focused_id]
-      entry[:main]&.stop(now: @now, immediate: immediate)
-      entry[:main] = nil
-      @focused_id = nil
-      resume_grid_pumps if @window_open
+      stop_current_focus(immediate: immediate)
     end
 
     # ---- state publication ----
