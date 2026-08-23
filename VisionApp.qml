@@ -131,6 +131,9 @@ Item {
     minimumSize: Qt.size(680, 480)
 
     onVisibleChanged: {
+      if (root.visionService && typeof root.visionService.setWindowState === "function") {
+        root.visionService.setWindowState(visible)
+      }
       if (!visible && !root.closingFromHost) {
         if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
         else root.close()
@@ -1076,7 +1079,7 @@ Item {
               anchors.fill: parent
               anchors.margins: Style.space(6)
               cameraId: delegateRoot.modelData
-              fps: 0
+              fps: root.visionService ? root.visionService.subFps : 2
               baseUrl: root.visionService ? root.visionService.frameUrl(delegateRoot.modelData) : ""
               state: root.visionService ? root.visionService.stateFor(delegateRoot.modelData) : null
 

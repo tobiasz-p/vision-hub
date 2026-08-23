@@ -12,10 +12,17 @@ BarWidget {
   id: root
   moduleName: "tobiasz-p.vision-hub"
 
+  function parseBool(value, fallback) {
+    if (value === true || value === "true" || value === 1 || value === "1") return true
+    if (value === false || value === "false" || value === 0 || value === "0") return false
+    return fallback
+  }
+
   // ---- settings (shell.json layout entry via `omarchy bar set`) ----------
   readonly property int subFps: clampInt(setting("targetFps", 5), 1, 15)
   readonly property int mainFps: clampInt(setting("mainFps", 10), 1, 30)
-  readonly property bool hwaccel: setting("hwaccel", true) !== false
+  readonly property bool hwaccel: parseBool(setting("hwaccel", true), true)
+  readonly property bool defaultAudio: parseBool(setting("audioEnabled", false), false)
   readonly property int gridColumns: clampInt(setting("gridColumns", 3), 1, 6)
 
   function clampInt(value, min, max) {
@@ -32,13 +39,18 @@ BarWidget {
     visionService.applySettings({
       subFps: root.subFps,
       mainFps: root.mainFps,
-      hwaccel: root.hwaccel
+      hwaccel: root.hwaccel,
+      audioEnabled: root.defaultAudio
     })
   }
 
   Component.onCompleted: root.pushSettings()
   onVisionServiceChanged: root.pushSettings()
   onSettingsChanged: root.pushSettings()
+  onDefaultAudioChanged: root.pushSettings()
+  onSubFpsChanged: root.pushSettings()
+  onMainFpsChanged: root.pushSettings()
+  onHwaccelChanged: root.pushSettings()
 
   // ---- derived state -----------------------------------------------------------
   readonly property var states: visionService ? visionService.cameraStates : ({})

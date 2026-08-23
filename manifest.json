@@ -25,18 +25,20 @@
     "defaultSection": "right",
     "defaults": {
       "gridColumns": 3,
-      "targetFps": 5,
-      "subFps": 5,
+      "targetFps": 2,
+      "subFps": 2,
       "mainFps": 15,
       "hwaccel": true,
+      "audioEnabled": false,
       "showOfflineCameras": true,
       "probeIntervalSec": 10
     },
     "schema": [
       { "key": "gridColumns", "type": "integer", "label": "Grid columns", "min": 1, "max": 6, "step": 1, "defaultValue": 3 },
-      { "key": "targetFps", "type": "integer", "label": "Substream fps (grid tiles)", "min": 1, "max": 15, "step": 1, "defaultValue": 5 },
+      { "key": "targetFps", "type": "integer", "label": "Grid framerate (fps per camera)", "min": 1, "max": 10, "step": 1, "defaultValue": 2 },
       { "key": "mainFps", "type": "integer", "label": "Mainstream fps (focused view)", "min": 1, "max": 30, "step": 1, "defaultValue": 15 },
       { "key": "hwaccel", "type": "boolean", "label": "Hardware decode (vaapi/auto)", "defaultValue": true },
+      { "key": "audioEnabled", "type": "boolean", "label": "Play audio by default in cinema view", "defaultValue": false },
       { "key": "showOfflineCameras", "type": "boolean", "label": "Show offline cameras in the grid", "defaultValue": true }
     ]
   }

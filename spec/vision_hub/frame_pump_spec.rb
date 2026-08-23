@@ -63,10 +63,10 @@ RSpec.describe VisionHub::FramePump do
     end
   end
 
-  def build_pump(role:, fps:, hwaccel:, input_strategy:, secrets:)
+  def build_pump(role:, fps:, hwaccel:, input_strategy:, secrets:, audio: false)
     described_class.new(
       camera: camera, role: role, runtime_dir: runtime_dir, fps: fps, hwaccel: hwaccel,
-      input_strategy: input_strategy, secrets: secrets,
+      audio: audio, input_strategy: input_strategy, secrets: secrets,
       spawner: spawner, reaper: reaper, killer: killer
     ).on_event { |payload| events << payload }
   end
@@ -86,12 +86,12 @@ RSpec.describe VisionHub::FramePump do
       expect(argv).not_to include('-f')
     end
 
-    it 'targets one shared JPEG per camera with snapshot mode for sub role' do
+    it 'targets continuous streaming with low fps and scale for sub role' do
       argv = pump.build_argv('rtsp://u:p@h/s')
 
       expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
-      expect(argv).to include('-frames:v', '1', '-y', '-atomic_writing', '1')
-      expect(argv[argv.index('-vf') + 1]).to eq('scale=640:-1')
+      expect(argv).to include('-update', '1', '-y', '-atomic_writing', '1')
+      expect(argv[argv.index('-vf') + 1]).to eq('fps=5,scale=640:-1')
       expect(argv).to include('-hwaccel', 'auto')
     end
 
@@ -103,6 +103,14 @@ RSpec.describe VisionHub::FramePump do
       expect(argv).to include('-update', '1', '-atomic_writing', '1', '-y')
       expect(argv[argv.index('-vf') + 1]).to eq('fps=20,scale=1280:-1')
       expect(argv).to include('-hwaccel', 'auto')
+    end
+
+    it 'includes pulse audio output when audio is enabled' do
+      main_pump = build_pump(role: :main, fps: 15, hwaccel: true, input_strategy: :argv,
+                             audio: true, secrets: secrets)
+      argv = main_pump.build_argv('rtsp://u:p@h/s')
+
+      expect(argv).to include('-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2', '-f', 'pulse', 'VisionHub')
     end
 
     context 'with hwaccel disabled' do

@@ -23,10 +23,10 @@ module VisionHub
     UNCONFIGURED_RETRY = 30.0
     RTSP_TIMEOUT_US = 8_000_000
 
-    attr_reader :camera, :role, :fps, :hwaccel, :input_strategy, :status, :last_error
+    attr_reader :camera, :role, :fps, :hwaccel, :input_strategy, :audio, :status, :last_error
 
     def initialize(camera:, role:, runtime_dir:, fps:, hwaccel:,
-                   input_strategy: :argv, secrets: nil, logger: nil, **process_io)
+                   audio: false, input_strategy: :argv, secrets: nil, logger: nil, **process_io)
       raise ArgumentError, "unknown role #{role.inspect}" unless ROLES.include?(role)
 
       @camera = camera
@@ -34,6 +34,7 @@ module VisionHub
       @runtime_dir = runtime_dir
       @fps = fps
       @hwaccel = hwaccel
+      @audio = audio
       @input_strategy = input_strategy
       @secrets = secrets
       @logger = logger
@@ -111,11 +112,19 @@ module VisionHub
       argv += ['-hwaccel', 'auto'] if @hwaccel
       argv += input_argv(url)
       if @role == :sub
-        argv + ['-an', '-sn', '-dn', '-vf', 'scale=640:-1', '-frames:v', '1',
-                '-q:v', '6', '-atomic_writing', '1', '-y', frame_path]
-      else
-        argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1280:-1",
+        argv + ['-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=640:-1",
                 '-q:v', '6', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
+      else
+        video_out = ['-map', '0:v:0', '-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1280:-1",
+                     '-q:v', '6', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
+        if @audio
+          audio_out = ['-map', '0:a:0?', '-vn', '-sn', '-dn',
+                       '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2',
+                       '-f', 'pulse', 'VisionHub']
+          argv + video_out + audio_out
+        else
+          argv + video_out
+        end
       end
     end
 
@@ -208,10 +217,6 @@ module VisionHub
       log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? 'stopped' : 'died'})")
       if intentional
         finish_intentional(exit_code, now)
-      elsif @role == :sub && exit_code.zero?
-        close_child
-        @status = :stopped
-        emit(event: :exited, code: exit_code, intentional: true, error: nil)
       else
         finish_crashed(exit_code, now)
       end

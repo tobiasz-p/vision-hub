@@ -64,22 +64,29 @@ Item {
     return cameraStates[cameraId] || null
   }
 
+  function parseBool(value, fallback) {
+    if (value === true || value === "true" || value === 1 || value === "1") return true
+    if (value === false || value === "false" || value === 0 || value === "0") return false
+    return fallback
+  }
+
   function applySettings(settings) {
-    var changed = false
-    if (settings.subFps !== undefined && settings.subFps !== root.subFps) {
-      root.subFps = settings.subFps
-      changed = true
+    if (settings.subFps !== undefined) {
+      var sFps = parseInt(settings.subFps, 10)
+      if (isFinite(sFps)) root.subFps = sFps
     }
-    if (settings.mainFps !== undefined && settings.mainFps !== root.mainFps) {
-      root.mainFps = settings.mainFps
-      changed = true
+    if (settings.mainFps !== undefined) {
+      var mFps = parseInt(settings.mainFps, 10)
+      if (isFinite(mFps)) root.mainFps = mFps
     }
-    if (settings.hwaccel !== undefined && settings.hwaccel !== root.hwaccel) {
-      root.hwaccel = settings.hwaccel
-      changed = true
+    if (settings.hwaccel !== undefined) {
+      root.hwaccel = parseBool(settings.hwaccel, root.hwaccel)
     }
-    // The actual restart is driven by onArgSignatureChanged so every knob
-    // change funnels through one code path.
+    if (settings.audioEnabled !== undefined) {
+      var audio = parseBool(settings.audioEnabled, root.defaultAudio)
+      root.defaultAudio = audio
+      root.audioEnabled = audio
+    }
   }
 
   // ---- commands toward the daemon ---------------------------------------------
@@ -89,12 +96,13 @@ Item {
     return true
   }
 
+  property bool defaultAudio: false
   property bool audioEnabled: false
 
   function focusCamera(cameraId, fps) {
     var targetFps = fps !== undefined ? fps : root.mainFps
-    root.audioEnabled = false
-    send({ cmd: "focus", camera: cameraId, fps: targetFps })
+    root.audioEnabled = root.defaultAudio
+    send({ cmd: "focus", camera: cameraId, fps: targetFps, audio: root.audioEnabled })
   }
 
   function setMainFps(fps) {
@@ -116,6 +124,10 @@ Item {
   function unfocusCamera() {
     root.audioEnabled = false
     send({ cmd: "unfocus" })
+  }
+
+  function setWindowState(isOpen) {
+    send({ cmd: "window", open: isOpen === true })
   }
 
   function focus(cameraId, fps) {

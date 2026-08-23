@@ -8,7 +8,7 @@ RSpec.describe VisionHub::Supervisor do
       cameras: cameras, runtime_dir: '/run/vision-hub', secrets: secrets,
       fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
       probe_interval: probe_interval, logger: nil,
-      build_pump: build_pump, audio_pump_builder: audio_pump_builder, probe_runner: probe_runner
+      build_pump: build_pump, probe_runner: probe_runner
     )
   end
 
@@ -29,14 +29,6 @@ RSpec.describe VisionHub::Supervisor do
     lambda do |kwargs|
       fake = Fakes::Pump.new(kwargs)
       pumps_by_id_role[[kwargs[:camera].id, kwargs[:role]]] = fake
-      fake
-    end
-  end
-  let(:audio_pumps) { [] }
-  let(:audio_pump_builder) do
-    lambda do |kwargs|
-      fake = Fakes::Pump.new(kwargs)
-      audio_pumps << fake
       fake
     end
   end
@@ -66,20 +58,28 @@ RSpec.describe VisionHub::Supervisor do
       expect(kinds.count(:camera_state)).to eq(2)
     end
 
+    it 'starts grid streams when window opens and stops them when window closes' do
+      supervisor.start(now: 0)
+      flush!
+
+      supervisor.handle({ 'cmd' => 'window', 'open' => true }, now: 1)
+      expect(pumps_by_id_role[['front', :sub]].running?).to be(true)
+      expect(pumps_by_id_role[['garage', :sub]].running?).to be(true)
+
+      supervisor.handle({ 'cmd' => 'window', 'open' => false }, now: 2)
+      expect(pumps_by_id_role[['front', :sub]].running?).to be(false)
+      expect(pumps_by_id_role[['garage', :sub]].running?).to be(false)
+    end
+
     it 'reports unconfigured cameras through the state stream' do
-      cameras.pop
       bare = described_class.new(
         cameras: [cameras[0]], runtime_dir: '/run/vision-hub', secrets: Fakes::Secrets.new,
         fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
-        build_pump: build_pump, probe_runner: probe_runner
+        build_pump: ->(kw) { Fakes::Pump.new(kw).tap { |p| p.start_mode = :unconfigured } },
+        probe_runner: probe_runner
       )
-      # The pump factory is consulted lazily, so flip behavior before start.
-      allow(build_pump).to receive(:call).and_wrap_original do |call, kwargs|
-        pump = call.call(kwargs)
-        pump.start_mode = :unconfigured
-        pump
-      end
       bare.start(now: 0)
+      bare.handle({ 'cmd' => 'window', 'open' => true }, now: 0)
 
       expect(bare.drain_outbox).to include(
         hash_including(event: :camera_state, id: 'front', error: 'credentials not found in keyring')
@@ -156,7 +156,8 @@ RSpec.describe VisionHub::Supervisor do
       expect(pumps_by_id_role[['garage', :main]].running?).to be(true)
     end
 
-    it 'unfocus stops the main pump but keeps the sub stream' do
+    it 'unfocus stops the main pump and resumes sub streams when window is open' do
+      supervisor.handle({ 'cmd' => 'window', 'open' => true }, now: 0)
       supervisor.handle({ 'cmd' => 'focus', 'camera' => 'front' }, now: 10)
       supervisor.handle({ 'cmd' => 'unfocus' }, now: 12)
 
@@ -240,12 +241,15 @@ RSpec.describe VisionHub::Supervisor do
       expect(supervisor.drain_outbox.last).to include(event: :error, message: include('explode'))
     end
 
-    it 'toggles audio playback on and off' do
-      supervisor.handle({ 'cmd' => 'audio', 'camera' => 'front', 'enabled' => true }, now: 1)
-      expect(audio_pumps.last&.running?).to be(true)
+    it 'toggles audio playback on and off on the focused mainstream pump' do
+      supervisor.handle({ 'cmd' => 'focus', 'camera' => 'front' }, now: 1)
+      expect(pumps_by_id_role[['front', :main]].kwargs[:audio]).to be(false)
 
-      supervisor.handle({ 'cmd' => 'audio', 'camera' => 'front', 'enabled' => false }, now: 2)
-      expect(audio_pumps.last&.running?).to be(false)
+      supervisor.handle({ 'cmd' => 'audio', 'camera' => 'front', 'enabled' => true }, now: 2)
+      expect(pumps_by_id_role[['front', :main]].kwargs[:audio]).to be(true)
+
+      supervisor.handle({ 'cmd' => 'audio', 'camera' => 'front', 'enabled' => false }, now: 3)
+      expect(pumps_by_id_role[['front', :main]].kwargs[:audio]).to be(false)
     end
   end
 end

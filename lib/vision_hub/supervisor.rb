@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'audio_pump'
-
 module VisionHub
   # Orchestrates health probes and frame pumps for every configured camera,
   # translates IPC commands into lifecycle actions, and emits state events.
@@ -30,18 +28,10 @@ module VisionHub
       @input_strategy = input_strategy
       @probe_interval = probe_interval
       @logger = logger
-      init_collaborators(collaborators)
-      reset_state
-    end
-
-    def init_collaborators(collaborators)
       @build_pump = collaborators[:build_pump] || ->(kwargs) { FramePump.new(**kwargs) }
-      @audio_pump_builder = collaborators[:audio_pump_builder] || ->(kwargs) { AudioPump.new(**kwargs) }
       @probe_runner = collaborators[:probe_runner] || ->(camera) { HealthProbe.new.probe(camera.host, camera.port) }
-    end
-
-    def reset_state
-      @audio_pump = nil
+      @audio_enabled = false
+      @window_open = false
       @outbox = []
       @focused_id = nil
       @last_emitted = {}
@@ -62,28 +52,34 @@ module VisionHub
       publish_changes
     end
 
+    COMMAND_HANDLERS = {
+      'ping' => :handle_ping,
+      'refresh' => :handle_refresh,
+      'focus' => :handle_focus,
+      'unfocus' => :handle_unfocus,
+      'set_fps' => :handle_fps,
+      'audio' => :handle_audio,
+      'window' => :handle_window
+    }.freeze
+
     # ---- IPC commands ----
 
     def handle(message, now:)
       @now = now
-      case message['cmd']
-      when 'ping' then emit(:pong, echo: message['echo'])
-      when 'refresh' then refresh_all
-      when 'focus' then handle_focus_cmd(message)
-      when 'unfocus' then unfocus
-      when 'set_fps' then change_fps(message['fps'])
-      when 'audio' then handle_audio_cmd(message)
-      else emit(:error, message: "unknown command #{message['cmd'].inspect}")
-      end
+      cmd = message['cmd']
+      method = COMMAND_HANDLERS[cmd]
+      return send(method, message) if method
+
+      emit(:error, message: "unknown command #{cmd.inspect}")
     end
 
-    def handle_focus_cmd(message)
-      focus(message['camera'], fps: message['fps']&.to_i)
-    end
-
-    def handle_audio_cmd(message)
-      toggle_audio(message['camera'], message['enabled'] == true)
-    end
+    def handle_ping(message) = emit(:pong, echo: message['echo'])
+    def handle_refresh(_msg) = refresh_all
+    def handle_focus(message) = focus(message['camera'], fps: message['fps']&.to_i, audio: message['audio'])
+    def handle_unfocus(_msg) = unfocus
+    def handle_fps(message) = change_fps(message['fps'])
+    def handle_audio(message) = toggle_audio(message['camera'], message['enabled'] == true)
+    def handle_window(message) = update_window_state(message['open'] == true)
 
     def tick(now:)
       return unless ready?
@@ -91,7 +87,6 @@ module VisionHub
       @now = now
       run_due_probe
       each_pump { |pump| pump.tick(now: @now) }
-      @audio_pump&.tick(now: @now)
       publish_changes
     end
 
@@ -105,7 +100,6 @@ module VisionHub
     # the caller escalates via further ticks or relies on PDEATHSIG if this
     # process is killed outright.
     def shutdown(now:)
-      stop_audio
       return unless @pumps
 
       each_pump { |pump| pump.stop(now: now) }
@@ -124,11 +118,12 @@ module VisionHub
       end
     end
 
-    def new_pump(camera, role, fps: nil)
+    def new_pump(camera, role, fps: nil, audio: false)
       @build_pump.call(
         camera: camera, role: role, runtime_dir: @runtime_dir,
         fps: role == :main ? (fps || @main_fps) : @fps,
         hwaccel: @hwaccel,
+        audio: role == :main ? audio : false,
         input_strategy: @input_strategy, secrets: @secrets
       ).on_event { |payload| absorb_pump_event(payload) }
     end
@@ -181,28 +176,53 @@ module VisionHub
       @states[camera.id][:online] = result == :online
       @probe_due[camera.id] = @now + @probe_interval
       publish_changes if was_online != @states[camera.id][:online]
-      @pumps.dig(camera.id, :sub)&.start(now: @now) if result == :online
+      @pumps.dig(camera.id, :sub)&.start(now: @now) if result == :online && @window_open && !@focused_id
     end
 
-    # ---- focus ----
+    # ---- window and focus control ----
 
-    def focus(camera_id, fps: nil)
+    def update_window_state(open)
+      @window_open = open
+      if @window_open
+        resume_grid_pumps unless @focused_id
+      else
+        stop_all_streaming
+      end
+    end
+
+    def resume_grid_pumps
+      @pumps.each_value { |entry| entry[:sub]&.start(now: @now) }
+    end
+
+    def stop_all_streaming
+      unfocus(immediate: true)
+      @pumps.each_value { |entry| entry[:sub]&.stop(now: @now, immediate: true) }
+    end
+
+    def focus(camera_id, fps: nil, audio: nil)
       camera = @cameras.find { |c| c.id == camera_id }
       return emit(:error, message: "focus: unknown camera #{camera_id.inspect}") unless camera
 
       target_fps = fps || @main_fps
-      return if matching_focus?(camera_id, target_fps)
+      target_audio = audio.nil? ? @audio_enabled : audio
+      return if matching_focus?(camera_id, target_fps, target_audio)
 
+      start_focus(camera, target_fps, target_audio)
+    end
+
+    def start_focus(camera, target_fps, target_audio)
       unfocus(immediate: true)
-      @focused_id = camera_id
-      main = new_pump(camera, :main, fps: target_fps)
-      @pumps[camera_id][:main] = main
+      @pumps.each_value { |entry| entry[:sub]&.stop(now: @now, immediate: true) }
+      @focused_id = camera.id
+      main = new_pump(camera, :main, fps: target_fps, audio: target_audio)
+      @pumps[camera.id][:main] = main
       main.start(now: @now)
     end
 
-    def matching_focus?(camera_id, target_fps)
+    def matching_focus?(camera_id, target_fps, target_audio)
       current = @pumps.dig(camera_id, :main)
-      @focused_id == camera_id && current&.running? && current.fps == target_fps
+      @focused_id == camera_id && current&.running? &&
+        current.fps == target_fps && current.audio == target_audio
     end
 
     def change_fps(fps)
@@ -210,30 +230,20 @@ module VisionHub
       focus(@focused_id, fps: @main_fps) if @focused_id
     end
 
+    def toggle_audio(camera_id, enabled)
+      @audio_enabled = enabled
+      focus(camera_id || @focused_id, audio: @audio_enabled) if @focused_id
+    end
+
     def unfocus(immediate: false)
-      stop_audio
       return unless @focused_id
 
+      @audio_enabled = false
       entry = @pumps[@focused_id]
       entry[:main]&.stop(now: @now, immediate: immediate)
       entry[:main] = nil
       @focused_id = nil
-    end
-
-    def toggle_audio(camera_id, enabled)
-      stop_audio
-      return unless enabled
-
-      camera = @cameras.find { |c| c.id == (camera_id || @focused_id) }
-      return unless camera
-
-      @audio_pump = @audio_pump_builder.call(camera: camera, secrets: @secrets, logger: @logger)
-      @audio_pump.start(now: @now)
-    end
-
-    def stop_audio
-      @audio_pump&.stop(now: @now)
-      @audio_pump = nil
+      resume_grid_pumps if @window_open
     end
 
     # ---- state publication ----

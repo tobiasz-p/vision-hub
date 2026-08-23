@@ -61,6 +61,8 @@ module Fakes
 
     def fps = @kwargs[:fps]
 
+    def audio = @kwargs[:audio] || false
+
     def quality = @kwargs[:quality]
 
     def last_error = nil
