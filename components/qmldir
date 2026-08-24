@@ -1,0 +1,20 @@
+singleton Theme 1.0 Theme.qml
+BottomCameraDock 1.0 BottomCameraDock.qml
+BrandBlock 1.0 BrandBlock.qml
+CameraBadge 1.0 CameraBadge.qml
+CameraGridView 1.0 CameraGridView.qml
+CameraTile 1.0 CameraTile.qml
+CinemaView 1.0 CinemaView.qml
+DensitySelector 1.0 DensitySelector.qml
+EmptyState 1.0 EmptyState.qml
+FpsDropdown 1.0 FpsDropdown.qml
+FrameImage 1.0 FrameImage.qml
+HeaderBar 1.0 HeaderBar.qml
+LiveStatusCapsule 1.0 LiveStatusCapsule.qml
+NavChevronButton 1.0 NavChevronButton.qml
+PillButton 1.0 PillButton.qml
+StatusDot 1.0 StatusDot.qml
+StreamHudBadge 1.0 StreamHudBadge.qml
+TilePlaceholder 1.0 TilePlaceholder.qml
+TileStatusBadge 1.0 TileStatusBadge.qml
+ViewModeSwitcher 1.0 ViewModeSwitcher.qml

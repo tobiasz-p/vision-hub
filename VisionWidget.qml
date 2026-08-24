@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Ui
+import "components"
 
 // VisionHub bar widget — camera health at a glance.
 //
@@ -10,7 +11,7 @@ import qs.Ui
 // re-probe everything now; middle click force refreshes.
 BarWidget {
   id: root
-  moduleName: "tobiasz-p.vision-hub"
+  moduleName: Theme.pluginId
 
   function parseBool(value, fallback) {
     if (value === true || value === "true" || value === 1 || value === "1") return true
@@ -32,7 +33,7 @@ BarWidget {
   }
 
   // ---- service link ---------------------------------------------------------
-  readonly property var visionService: bar && bar.shell ? bar.shell.serviceFor("tobiasz-p.vision-hub") : null
+  readonly property var visionService: bar && bar.shell ? bar.shell.serviceFor(Theme.pluginId) : null
 
   function pushSettings() {
     if (!visionService) return
@@ -64,13 +65,7 @@ BarWidget {
     for (var id in states) if (states[id].online === true) count += 1
     return count
   }
-  readonly property int streamingCameras: {
-    var count = 0
-    for (var id in states) if (states[id].streaming === true) count += 1
-    return count
-  }
   readonly property bool configured: totalCameras > 0
-  readonly property bool allOnline: configured && onlineCameras === totalCameras
   readonly property bool anyOffline: configured && onlineCameras < totalCameras
 
   implicitWidth: button.implicitWidth
@@ -92,7 +87,7 @@ BarWidget {
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.RightButton) {
         if (root.visionService) root.visionService.refresh()
-        else if (root.bar && root.bar.shell) root.bar.shell.toggle("tobiasz-p.vision-hub", "{}")
+        else if (root.bar && root.bar.shell) root.bar.shell.toggle(Theme.pluginId, "{}")
         return
       }
       if (mouseButton === Qt.MiddleButton) {
@@ -100,7 +95,7 @@ BarWidget {
         return
       }
       if (root.bar && root.bar.shell) {
-        root.bar.shell.toggle("tobiasz-p.vision-hub", JSON.stringify({ columns: root.gridColumns }))
+        root.bar.shell.toggle(Theme.pluginId, JSON.stringify({ columns: root.gridColumns }))
       }
     }
   }

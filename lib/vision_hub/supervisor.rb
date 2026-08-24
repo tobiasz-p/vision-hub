@@ -263,6 +263,7 @@ module VisionHub
       entry = @pumps.fetch(id, {})
       {
         id:,
+        name: @states[id][:name],
         online: @states[id][:online],
         streaming: [entry[:sub], entry[:main]].compact.any?(&:running?),
         error: @states[id][:error]

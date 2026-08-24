@@ -18,7 +18,7 @@ module VisionHub
       [status.success?, stdout, stderr]
     }
 
-    def initialize(application_id:, runner: DEFAULT_RUNNER)
+    def initialize(application_id: DEFAULT_APPLICATION_ID, runner: DEFAULT_RUNNER)
       @application_id = application_id
       @runner = runner
       @cache = {}

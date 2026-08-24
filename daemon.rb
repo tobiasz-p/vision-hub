@@ -62,7 +62,7 @@ end.new
 supervisor = VisionHub::Supervisor.new(
   cameras: config.active_cameras,
   runtime_dir: options[:runtime_dir],
-  secrets: VisionHub::SecretStore.new(application_id: "tobiasz-p.vision-hub"),
+  secrets: VisionHub::SecretStore.new,
   fps: options[:fps],
   main_fps: options[:main_fps],
   quality: options[:quality],

@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+module VisionHub
+  DEFAULT_APPLICATION_ID = "tobiasz-p.vision-hub"
+end
+
 # Umbrella require for the VisionHub daemon library. The daemon and the spec
 # suite both go through this entry point.
 require_relative "vision_hub/camera"

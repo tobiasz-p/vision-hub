@@ -48,7 +48,6 @@ Item {
     ids.sort()
     return ids
   }
-  readonly property bool sessionReady: _ready
   property bool _ready: false
   property string daemonError: ""
   property string configError: ""
@@ -116,11 +115,6 @@ Item {
     return root.audioEnabled
   }
 
-  function setAudio(enabled, cameraId) {
-    root.audioEnabled = enabled === true
-    send({ cmd: "audio", camera: cameraId, enabled: root.audioEnabled })
-  }
-
   function unfocusCamera() {
     root.audioEnabled = false
     send({ cmd: "unfocus" })
@@ -130,20 +124,8 @@ Item {
     send({ cmd: "window", open: isOpen === true })
   }
 
-  function focus(cameraId, fps) {
-    focusCamera(cameraId, fps)
-  }
-
-  function unfocus() {
-    unfocusCamera()
-  }
-
   function refresh() {
     send({ cmd: "refresh" })
-  }
-
-  function ping(echoToken) {
-    return send({ cmd: "ping", echo: echoToken })
   }
 
   // ---- daemon lifecycle --------------------------------------------------------
@@ -260,6 +242,7 @@ Item {
       case "camera_state":
         var next = Object.assign({}, root.cameraStates)
         next[msg.id] = {
+          name: msg.name || msg.id,
           online: msg.online,
           streaming: msg.streaming === true,
           error: msg.error || null
