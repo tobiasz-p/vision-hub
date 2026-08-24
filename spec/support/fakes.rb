@@ -69,7 +69,7 @@ module Fakes
 
     def fail_later(error)
       @running = false
-      fire(event: :exited, code: 255, intentional: false, error: error)
+      fire(event: :exited, code: 255, intentional: false, error:)
     end
 
     def unconfigure_later

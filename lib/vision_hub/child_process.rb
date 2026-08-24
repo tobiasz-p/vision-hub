@@ -57,9 +57,9 @@ module VisionHub
     end
 
     def self.prepare_child(parent_pid)
-      require 'fiddle'
+      require "fiddle"
       libc = Fiddle.dlopen(nil)
-      prctl = Fiddle::Function.new(libc['prctl'], [Fiddle::TYPE_INT] * 5, Fiddle::TYPE_INT)
+      prctl = Fiddle::Function.new(libc["prctl"], [Fiddle::TYPE_INT] * 5, Fiddle::TYPE_INT)
       prctl.call(1, 15, 0, 0, 0) # PR_SET_PDEATHSIG, SIGTERM
       Process.exit!(1) if Process.ppid != parent_pid
       Process.setpgid(0, 0)

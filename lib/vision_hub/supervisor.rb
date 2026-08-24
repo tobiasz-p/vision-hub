@@ -28,16 +28,8 @@ module VisionHub
       @input_strategy = input_strategy
       @probe_interval = probe_interval
       @logger = logger
-      @build_pump = collaborators[:build_pump] || ->(kwargs) { FramePump.new(**kwargs) }
-      @probe_runner = collaborators[:probe_runner] || ->(camera) { HealthProbe.new.probe(camera.host, camera.port) }
-      @audio_enabled = false
-      @window_open = false
-      @outbox = []
-      @focused_id = nil
-      @last_emitted = {}
-      # Nothing is published until start() has queued hello, so the shell's
-      # first sight of camera states always follows session metadata.
-      @ready = false
+      init_collaborators(collaborators)
+      init_internal_state
     end
 
     def start(now:)
@@ -46,40 +38,40 @@ module VisionHub
       @round_robin = @cameras.map(&:id).cycle
       @states = @cameras.to_h { |c| [c.id, { id: c.id, name: c.name, online: nil, streaming: false, error: nil }] }
       @pumps = @cameras.to_h { |c| [c.id, { sub: new_pump(c, :sub), main: nil }] }
-      @pumps.each_value { |entry| entry[:sub].start(now: now) }
+      @pumps.each_value { |entry| entry[:sub].start(now:) }
       emit(:hello, cameras: @cameras.map(&:id))
       @ready = true
       publish_changes
     end
 
     COMMAND_HANDLERS = {
-      'ping' => :handle_ping,
-      'refresh' => :handle_refresh,
-      'focus' => :handle_focus,
-      'unfocus' => :handle_unfocus,
-      'set_fps' => :handle_fps,
-      'audio' => :handle_audio,
-      'window' => :handle_window
+      "ping" => :handle_ping,
+      "refresh" => :handle_refresh,
+      "focus" => :handle_focus,
+      "unfocus" => :handle_unfocus,
+      "set_fps" => :handle_fps,
+      "audio" => :handle_audio,
+      "window" => :handle_window
     }.freeze
 
     # ---- IPC commands ----
 
     def handle(message, now:)
       @now = now
-      cmd = message['cmd']
+      cmd = message["cmd"]
       method = COMMAND_HANDLERS[cmd]
       return send(method, message) if method
 
       emit(:error, message: "unknown command #{cmd.inspect}")
     end
 
-    def handle_ping(message) = emit(:pong, echo: message['echo'])
+    def handle_ping(message) = emit(:pong, echo: message["echo"])
     def handle_refresh(_msg) = refresh_all
-    def handle_focus(message) = focus(message['camera'], fps: message['fps']&.to_i, audio: message['audio'])
+    def handle_focus(message) = focus(message["camera"], fps: message["fps"]&.to_i, audio: message["audio"])
     def handle_unfocus(_msg) = unfocus
-    def handle_fps(message) = change_fps(message['fps'])
-    def handle_audio(message) = toggle_audio(message['camera'], message['enabled'] == true)
-    def handle_window(message) = update_window_state(message['open'] == true)
+    def handle_fps(message) = change_fps(message["fps"])
+    def handle_audio(message) = toggle_audio(message["camera"], message["enabled"] == true)
+    def handle_window(message) = update_window_state(message["open"] == true)
 
     def tick(now:)
       return unless ready?
@@ -102,7 +94,7 @@ module VisionHub
     def shutdown(now:)
       return unless @pumps
 
-      each_pump { |pump| pump.stop(now: now) }
+      each_pump { |pump| pump.stop(now:) }
     end
 
     private
@@ -120,7 +112,7 @@ module VisionHub
 
     def new_pump(camera, role, fps: nil, audio: false)
       @build_pump.call(
-        camera: camera, role: role, runtime_dir: @runtime_dir,
+        camera:, role:, runtime_dir: @runtime_dir,
         fps: role == :main ? (fps || @main_fps) : @fps,
         hwaccel: @hwaccel,
         audio: role == :main ? audio : false,
@@ -142,7 +134,7 @@ module VisionHub
       end
       state[:error] =
         if payload[:event] == :unconfigured
-          'credentials not found in keyring'
+          "credentials not found in keyring"
         else
           payload[:error]
         end
@@ -171,12 +163,12 @@ module VisionHub
     end
 
     def refresh_camera(camera)
-      result = @probe_runner.call(camera)
+      online = @probe_runner.call(camera) == :online
       was_online = @states[camera.id][:online]
-      @states[camera.id][:online] = result == :online
+      @states[camera.id][:online] = online
       @probe_due[camera.id] = @now + current_probe_interval
-      publish_changes if was_online != @states[camera.id][:online]
-      @pumps.dig(camera.id, :sub)&.start(now: @now) if result == :online && @window_open && !@focused_id
+      publish_changes if was_online != online
+      trigger_sub_pump(camera.id) if online
     end
 
     # ---- window and focus control ----
@@ -225,7 +217,7 @@ module VisionHub
       prev_id = @focused_id
       @audio_enabled = false
       entry = @pumps[prev_id]
-      entry[:main]&.stop(now: @now, immediate: immediate)
+      entry[:main]&.stop(now: @now, immediate:)
       entry[:main] = nil
       @focused_id = nil
       entry[:sub]&.start(now: @now) if @window_open
@@ -248,7 +240,7 @@ module VisionHub
     end
 
     def unfocus(immediate: false)
-      stop_current_focus(immediate: immediate)
+      stop_current_focus(immediate:)
     end
 
     # ---- state publication ----
@@ -270,7 +262,7 @@ module VisionHub
     def compute_state(id)
       entry = @pumps.fetch(id, {})
       {
-        id: id,
+        id:,
         online: @states[id][:online],
         streaming: [entry[:sub], entry[:main]].compact.any?(&:running?),
         error: @states[id][:error]
@@ -278,8 +270,28 @@ module VisionHub
     end
 
     def emit(event, **payload)
-      @outbox << { event: event }.merge(payload)
+      @outbox << { event: }.merge(payload)
       log(:debug, "emit #{event} #{payload.inspect}")
+    end
+
+    def trigger_sub_pump(camera_id)
+      return unless @window_open && !@focused_id
+
+      @pumps.dig(camera_id, :sub)&.start(now: @now)
+    end
+
+    def init_collaborators(collaborators)
+      @build_pump = collaborators[:build_pump] || ->(kwargs) { FramePump.new(**kwargs) }
+      @probe_runner = collaborators[:probe_runner] || ->(camera) { HealthProbe.new.probe(camera.host, camera.port) }
+    end
+
+    def init_internal_state
+      @audio_enabled = false
+      @window_open = false
+      @outbox = []
+      @focused_id = nil
+      @last_emitted = {}
+      @ready = false
     end
 
     def log(level, message)

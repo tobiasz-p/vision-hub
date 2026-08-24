@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
-require 'tmpdir'
+require "spec_helper"
+require "tmpdir"
 
 RSpec.describe VisionHub::Configuration do
-  describe '.parse' do
-    it 'parses a valid document and keeps only enabled cameras active' do
+  describe ".parse" do
+    it "parses a valid document and keeps only enabled cameras active" do
       config = described_class.parse(<<~JSON)
         {
           "cameras": [
@@ -20,26 +20,26 @@ RSpec.describe VisionHub::Configuration do
       expect(config.active_cameras.map(&:id)).to eq(%w[front])
     end
 
-    it 'reports malformed JSON verbatim' do
-      config = described_class.parse('{nope')
+    it "reports malformed JSON verbatim" do
+      config = described_class.parse("{nope")
 
       expect(config).not_to be_ok
-      expect(config.error).to include('invalid JSON')
+      expect(config.error).to include("invalid JSON")
     end
 
-    it 'rejects a top-level array' do
-      config = described_class.parse('[]')
+    it "rejects a top-level array" do
+      config = described_class.parse("[]")
 
       expect(config.error).to include('top level must be an object with a "cameras" array')
     end
 
-    it 'rejects a missing cameras key' do
-      config = described_class.parse('{}')
+    it "rejects a missing cameras key" do
+      config = described_class.parse("{}")
 
       expect(config.error).to include('"cameras" array')
     end
 
-    it 'rejects duplicate ids with both indexes named' do
+    it "rejects duplicate ids with both indexes named" do
       config = described_class.parse(<<~JSON)
         { "cameras": [{ "id": "front", "host": "a" }, { "id": "front", "host": "b" }] }
       JSON
@@ -48,40 +48,40 @@ RSpec.describe VisionHub::Configuration do
     end
   end
 
-  describe '.load' do
-    it 'reads the file from disk' do
+  describe ".load" do
+    it "reads the file from disk" do
       Dir.mktmpdir do |dir|
-        path = File.join(dir, 'cameras.json')
+        path = File.join(dir, "cameras.json")
         File.write(path, '{ "cameras": [{ "id": "front", "host": "10.0.0.5" }] }')
 
         config = described_class.load(path)
 
-        expect(config.camera_by_id('front').host).to eq('10.0.0.5')
+        expect(config.camera_by_id("front").host).to eq("10.0.0.5")
       end
     end
 
-    it 'survives a missing file with an error attached' do
-      config = described_class.load('/nonexistent/vision-hub/cameras.json')
+    it "survives a missing file with an error attached" do
+      config = described_class.load("/nonexistent/vision-hub/cameras.json")
 
       expect(config).not_to be_ok
-      expect(config.error).to include('No such file')
+      expect(config.error).to include("No such file")
       expect(config.active_cameras).to be_empty
     end
 
-    it 'caps absurdly large files' do
+    it "caps absurdly large files" do
       allow(File).to receive(:read).and_call_original
       allow(File).to receive(:read)
-        .with('/huge.json', mode: 'rb', encoding: 'UTF-8')
-        .and_return('x' * (described_class::MAX_BYTES + 1))
+        .with("/huge.json", mode: "rb", encoding: "UTF-8")
+        .and_return("x" * (described_class::MAX_BYTES + 1))
 
-      config = described_class.load('/huge.json')
+      config = described_class.load("/huge.json")
 
-      expect(config.error).to include('exceeds')
+      expect(config.error).to include("exceeds")
     end
   end
 
-  describe '#camera_by_id' do
-    it 'looks up among enabled cameras only' do
+  describe "#camera_by_id" do
+    it "looks up among enabled cameras only" do
       config = described_class.parse(<<~JSON)
         {
           "cameras": [
@@ -91,8 +91,8 @@ RSpec.describe VisionHub::Configuration do
         }
       JSON
 
-      expect(config.camera_by_id('front')).to be_a(VisionHub::Camera)
-      expect(config.camera_by_id('off')).to be_nil
+      expect(config.camera_by_id("front")).to be_a(VisionHub::Camera)
+      expect(config.camera_by_id("off")).to be_nil
     end
   end
 end

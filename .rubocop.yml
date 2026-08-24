@@ -1,5 +1,4 @@
-# VisionHub lint configuration. Runtime code and specs share the same rules
-# except where noted; new cops stay on so upgrades surface modern idioms.
+# frozen_string_literal: true
 
 plugins:
   - rubocop-performance
@@ -7,57 +6,100 @@ plugins:
   - rubocop-rspec
 
 AllCops:
-  TargetRubyVersion: 3.4
   NewCops: enable
   SuggestExtensions: false
   Exclude:
     - "vendor/**/*"
+    - "tmp/**/*"
+    - ".gemini/**/*"
     - "**/*.qml"
 
-Style/Documentation:
-  # Every class carries a comment anyway; this cop's boilerplate demands are
-  # stricter than useful here (e.g. it wants docs on tiny exception classes).
+Layout/ExtraSpacing:
+  AllowForAlignment: false
+
+Layout/HashAlignment:
   Enabled: false
 
 Layout/LineLength:
   Max: 120
 
-Metrics/MethodLength:
-  Max: 25
-  Exclude:
-    - "spec/**/*"
+Metrics/AbcSize:
+  Max: 20
 
 Metrics/BlockLength:
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
   Exclude:
-    - "spec/**/*"
+    - "spec/**/*_spec.rb"
     - "Rakefile"
 
-Metrics/AbcSize:
-  Max: 22
-
 Metrics/ClassLength:
-  # FramePump and Supervisor are cohesive state machines; carving them up
-  # would spread lifecycle transitions across files without reducing coupling.
+  Max: 190
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
   Exclude:
     - "lib/vision_hub/frame_pump.rb"
     - "lib/vision_hub/supervisor.rb"
 
 Metrics/ParameterLists:
-  # FramePump#initialize mirrors its collaborators one-to-one so specs can
-  # inject fakes for every seam. Camera's keyword constructor mirrors
-  # cameras.json the same way.
-  Max: 11
+  Max: 10
+
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/MethodLength:
+  Max: 25
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Metrics/ModuleLength:
+  Max: 175
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
 
 RSpec/ExampleLength:
   Max: 15
 
+RSpec/IndexedLet:
+  Enabled: false
+
 RSpec/MultipleMemoizedHelpers:
-  # Process-fake specs (spawner/reaper/killer seams) legitimately need many
-  # small lets; they read as a fixture table, not as hidden coupling.
   Max: 18
 
 RSpec/MultipleExpectations:
   Max: 6
 
 RSpec/NestedGroups:
-  Max: 4
+  Max: 5
+
+Style/Documentation:
+  Enabled: true
+  Exclude:
+    - "spec/**/*_spec.rb"
+    - "Rakefile"
+
+Style/GlobalVars:
+  Exclude:
+    - "daemon/daemon.rb"
+    - "spec/daemon_spec.rb"
+
+Style/HashSyntax:
+  EnforcedShorthandSyntax: always
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes

@@ -1,33 +1,33 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
-require 'tmpdir'
-require 'stringio'
-require 'fileutils'
+require "spec_helper"
+require "tmpdir"
+require "stringio"
+require "fileutils"
 
 RSpec.describe VisionHub::FramePump do
   subject(:pump) do
-    build_pump(role: role, fps: fps, hwaccel: hwaccel, input_strategy: input_strategy, secrets: secrets)
+    build_pump(role:, fps:, hwaccel:, input_strategy:, secrets:)
   end
 
   let(:camera) do
-    VisionHub::Camera.from_hash({ 'id' => 'front', 'host' => '10.0.0.5', 'username' => 'admin' }, 0)
+    VisionHub::Camera.from_hash({ "id" => "front", "host" => "10.0.0.5", "username" => "admin" }, 0)
   end
   let(:role) { :sub }
   let(:fps) { 5 }
   let(:hwaccel) { true }
   let(:input_strategy) { :argv }
-  let(:secrets) { Fakes::Secrets.new('front' => 'pw') }
+  let(:secrets) { Fakes::Secrets.new("front" => "pw") }
   let(:events) { [] }
 
   # ---- fake process machinery -------------------------------------------------
   let(:runtime_dir) { Dir.mktmpdir }
-  let(:spawned) { [] }          # argv arrays, one per spawn
-  let(:live) { {} }             # pid => true while the child has not exited
-  let(:pid_counter) { [4000] }  # last issued pid
-  let(:exits) { {} }            # pid => exit code to report on next reap
-  let(:signals) { [] }          # [target, name]
-  let(:stderr_text) { '' }
+  let(:spawned) { [] } # argv arrays, one per spawn
+  let(:live) { {} } # pid => true while the child has not exited
+  let(:pid_counter) { [4000] } # last issued pid
+  let(:exits) { {} } # pid => exit code to report on next reap
+  let(:signals) { [] } # [target, name]
+  let(:stderr_text) { "" }
 
   let(:spawner) do
     lambda do |argv|
@@ -65,9 +65,9 @@ RSpec.describe VisionHub::FramePump do
 
   def build_pump(role:, fps:, hwaccel:, input_strategy:, secrets:, audio: false)
     described_class.new(
-      camera: camera, role: role, runtime_dir: runtime_dir, fps: fps, hwaccel: hwaccel,
-      audio: audio, input_strategy: input_strategy, secrets: secrets,
-      spawner: spawner, reaper: reaper, killer: killer
+      camera:, role:, runtime_dir:, fps:, hwaccel:,
+      audio:, input_strategy:, secrets:,
+      spawner:, reaper:, killer:
     ).on_event { |payload| events << payload }
   end
 
@@ -77,73 +77,73 @@ RSpec.describe VisionHub::FramePump do
 
   after { FileUtils.remove_entry(runtime_dir) if File.directory?(runtime_dir) }
 
-  describe '#build_argv (argv strategy)' do
-    it 'passes the URL directly and forces TCP with a socket timeout' do
-      argv = pump.build_argv('rtsp://u:p@h/s')
+  describe "#build_argv (argv strategy)" do
+    it "passes the URL directly and forces TCP with a socket timeout" do
+      argv = pump.build_argv("rtsp://u:p@h/s")
 
-      expect(argv[argv.index('-i') + 1]).to eq('rtsp://u:p@h/s')
-      expect(argv[argv.index('-timeout') + 1]).to eq(described_class::RTSP_TIMEOUT_US.to_s)
-      expect(argv).not_to include('-f')
+      expect(argv[argv.index("-i") + 1]).to eq("rtsp://u:p@h/s")
+      expect(argv[argv.index("-timeout") + 1]).to eq(described_class::RTSP_TIMEOUT_US.to_s)
+      expect(argv).not_to include("-f")
     end
 
-    it 'targets snapshot mode for sub role' do
-      argv = pump.build_argv('rtsp://u:p@h/s')
+    it "targets snapshot mode for sub role" do
+      argv = pump.build_argv("rtsp://u:p@h/s")
 
-      expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
-      expect(argv).to include('-frames:v', '1', '-y', '-atomic_writing', '1')
-      expect(argv[argv.index('-vf') + 1]).to eq('scale=640:-1')
-      expect(argv).to include('-hwaccel', 'auto')
+      expect(argv).to end_with(File.join(runtime_dir, "front.jpg"))
+      expect(argv).to include("-frames:v", "1", "-y", "-atomic_writing", "1")
+      expect(argv[argv.index("-vf") + 1]).to eq("scale=640:-1")
+      expect(argv).to include("-hwaccel", "auto")
     end
 
-    it 'targets continuous streaming for main role with configured fps and 1080p resolution' do
-      main_pump = build_pump(role: :main, fps: 20, hwaccel: true, input_strategy: :argv, secrets: secrets)
-      argv = main_pump.build_argv('rtsp://u:p@h/s')
+    it "targets continuous streaming for main role with configured fps and 1080p resolution" do
+      main_pump = build_pump(role: :main, fps: 20, hwaccel: true, input_strategy: :argv, secrets:)
+      argv = main_pump.build_argv("rtsp://u:p@h/s")
 
-      expect(argv).to end_with(File.join(runtime_dir, 'front.jpg'))
-      expect(argv).to include('-update', '1', '-atomic_writing', '1', '-y')
-      expect(argv[argv.index('-vf') + 1]).to eq('fps=20,scale=1920:-1')
-      expect(argv).to include('-hwaccel', 'auto')
+      expect(argv).to end_with(File.join(runtime_dir, "front.jpg"))
+      expect(argv).to include("-update", "1", "-atomic_writing", "1", "-y")
+      expect(argv[argv.index("-vf") + 1]).to eq("fps=20,scale=1920:-1")
+      expect(argv).to include("-hwaccel", "auto")
     end
 
-    it 'includes pulse audio output when audio is enabled' do
+    it "includes pulse audio output when audio is enabled" do
       main_pump = build_pump(role: :main, fps: 15, hwaccel: true, input_strategy: :argv,
-                             audio: true, secrets: secrets)
-      argv = main_pump.build_argv('rtsp://u:p@h/s')
+                             audio: true, secrets:)
+      argv = main_pump.build_argv("rtsp://u:p@h/s")
 
-      expect(argv).to include('-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2', '-f', 'pulse', 'VisionHub')
+      expect(argv).to include("-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", "-f", "pulse", "VisionHub")
     end
 
-    context 'with hwaccel disabled' do
+    context "with hwaccel disabled" do
       let(:hwaccel) { false }
 
-      it 'omits hardware decode flags' do
-        expect(pump.build_argv('rtsp://u:p@h/s')).not_to include('-hwaccel')
+      it "omits hardware decode flags" do
+        expect(pump.build_argv("rtsp://u:p@h/s")).not_to include("-hwaccel")
       end
     end
 
-    context 'with the concat_file strategy' do
+    context "with the concat_file strategy" do
       let(:input_strategy) { :concat_file }
 
-      it 'writes a 0600 playlist and keeps the credential out of argv' do
-        argv = pump.build_argv('rtsp://admin:s3cret@10.0.0.5/stream2')
+      it "writes a 0600 playlist and keeps the credential out of argv" do
+        argv = pump.build_argv("rtsp://admin:s3cret@10.0.0.5/stream2")
 
-        playlist = File.join(runtime_dir, 'front.sub.ffconcat')
+        playlist = File.join(runtime_dir, "front.sub.ffconcat")
         expect(argv).to include(playlist)
-        expect(argv.join(' ')).not_to include('s3cret')
-        expect(format('%o', File.stat(playlist).mode)).to end_with('600')
+        expect(argv.join(" ")).not_to include("s3cret")
+        expect(format("%o", File.stat(playlist).mode)).to end_with("600")
         expect(File.read(playlist)).to include("file 'rtsp://admin:s3cret@10.0.0.5/stream2'")
       end
 
-      it 'escapes single quotes in the URL' do
+      it "escapes single quotes in the URL" do
         pump.build_argv("rtsp://a:b'c@d/s")
 
-        expect(File.read(File.join(runtime_dir, 'front.sub.ffconcat'))).to include("b''c")
+        expect(File.read(File.join(runtime_dir, "front.sub.ffconcat"))).to include("b''c")
       end
     end
   end
 
-  describe 'start / stop lifecycle' do
-    it 'spawns ffmpeg once and reports running' do
+  describe "start / stop lifecycle" do
+    it "spawns ffmpeg once and reports running" do
       pump.start(now: 100)
 
       expect(spawned.size).to eq(1)
@@ -151,7 +151,7 @@ RSpec.describe VisionHub::FramePump do
       expect(events.map { |e| e[:event] }).to eq([:started])
     end
 
-    it 'ignores start() while running or backing off' do
+    it "ignores start() while running or backing off" do
       pump.start(now: 100)
       exits[pid_counter[0]] = 1
       pump.tick(now: 101)
@@ -162,21 +162,21 @@ RSpec.describe VisionHub::FramePump do
       expect(spawned.size).to eq(1)
     end
 
-    it 'uses the mainstream URL for the main role' do
+    it "uses the mainstream URL for the main role" do
       main_pump = build_pump(role: :main, fps: 10, hwaccel: true, input_strategy: :argv,
-                             secrets: Fakes::Secrets.new('front' => 'pw'))
+                             secrets: Fakes::Secrets.new("front" => "pw"))
       main_pump.start(now: 100)
 
-      url = spawned[0][spawned[0].index('-i') + 1]
-      expect(url).to end_with('/stream1')
-      expect(url).to include('admin:pw@')
+      url = spawned[0][spawned[0].index("-i") + 1]
+      expect(url).to end_with("/stream1")
+      expect(url).to include("admin:pw@")
     end
 
-    it 'stops gracefully: TERM then confirmation via the reaper' do
+    it "stops gracefully: TERM then confirmation via the reaper" do
       pump.start(now: 100)
       pump.stop(now: 100)
 
-      expect(signals.last).to eq([-pid_counter[0], 'TERM'])
+      expect(signals.last).to eq([-pid_counter[0], "TERM"])
       expect(pump.status).to eq(:stopping)
 
       exits[pid_counter[0]] = 0
@@ -186,13 +186,13 @@ RSpec.describe VisionHub::FramePump do
       expect(pump.running?).to be(false)
     end
 
-    it 'escalates to KILL once TERM goes unanswered past the grace period' do
+    it "escalates to KILL once TERM goes unanswered past the grace period" do
       pump.start(now: 100)
       pid = pid_counter[0]
       pump.stop(now: 100)
       pump.tick(now: 200)
 
-      expect(signals).to include([-pid, 'KILL'])
+      expect(signals).to include([-pid, "KILL"])
 
       exits[pid] = 9
       pump.tick(now: 201)
@@ -216,8 +216,8 @@ RSpec.describe VisionHub::FramePump do
     end
   end
 
-  describe 'crash handling and backoff' do
-    it 'backs off exponentially and restarts only after the delay elapses' do
+  describe "crash handling and backoff" do
+    it "backs off exponentially and restarts only after the delay elapses" do
       pump.start(now: 100)
       exits[pid_counter[0]] = 255
 
@@ -232,13 +232,13 @@ RSpec.describe VisionHub::FramePump do
       expect(pump.status).to eq(:running)
     end
 
-    it 'grows the delay up to the cap across repeated failures' do
+    it "grows the delay up to the cap across repeated failures" do
       delays = []
       pump.start(now: 0)
       4.times do |round|
         now = 0.1 + (round * 100)
         exits[pid_counter[0]] = 1
-        pump.tick(now: now)
+        pump.tick(now:)
         delays << backoff_due_at(now).round(6)
         pump.tick(now: now + 61) # always past due → respawn
       end
@@ -246,17 +246,17 @@ RSpec.describe VisionHub::FramePump do
       expect(delays).to eq([1.0, 2.0, 4.0, 8.0])
     end
 
-    it 'resets attempts once a child stayed alive past the stability window' do
+    it "resets attempts once a child stayed alive past the stability window" do
       pump.start(now: 0)
       exits[pid_counter[0]] = 1
-      pump.tick(now: 1)   # crash 1 → 1s backoff
-      pump.tick(now: 2)   # respawn
+      pump.tick(now: 1) # crash 1 → 1s backoff
+      pump.tick(now: 2) # respawn
 
       exits[pid_counter[0]] = 1
       pump.tick(now: 2.5) # crash 2 → grown backoff
       grown_backoff = backoff_due_at(2.5)
 
-      pump.tick(now: 5)   # respawn
+      pump.tick(now: 5) # respawn
       pump.tick(now: 500) # alive well past STABLE_AFTER → attempts forgotten
       exits[pid_counter[0]] = 1
       pump.tick(now: 501)
@@ -265,35 +265,35 @@ RSpec.describe VisionHub::FramePump do
       expect(backoff_due_at(501)).to eq(1.0)
     end
 
-    it 'surfaces the newest stderr line as error detail' do
+    it "surfaces the newest stderr line as error detail" do
       pump_with_stderr = described_class.new(
-        camera: camera, role: :sub, runtime_dir: runtime_dir, fps: 5, hwaccel: true,
-        input_strategy: :argv, secrets: secrets, spawner: spawner_with_stderr,
-        reaper: reaper, killer: killer
+        camera:, role: :sub, runtime_dir:, fps: 5, hwaccel: true,
+        input_strategy: :argv, secrets:, spawner: spawner_with_stderr,
+        reaper:, killer:
       )
 
       pump_with_stderr.start(now: 100)
       exits[pid_counter[0]] = 1
       pump_with_stderr.tick(now: 101.5)
 
-      expect(pump_with_stderr.last_error).to include('ffmpeg exited with code 1')
-      expect(pump_with_stderr.last_error).to include('Connection refused')
+      expect(pump_with_stderr.last_error).to include("ffmpeg exited with code 1")
+      expect(pump_with_stderr.last_error).to include("Connection refused")
     end
 
-    it 'emits exited events tagged with camera and role' do
+    it "emits exited events tagged with camera and role" do
       pump.start(now: 100)
       exits[pid_counter[0]] = 3
       pump.tick(now: 100.5)
 
       crash_event = events.find { |e| e[:event] == :exited }
-      expect(crash_event).to include(camera: 'front', role: :sub, intentional: false)
+      expect(crash_event).to include(camera: "front", role: :sub, intentional: false)
     end
   end
 
-  describe 'unconfigured cameras' do
+  describe "unconfigured cameras" do
     let(:secrets) { Fakes::Secrets.new }
 
-    it 'does not spawn, reports unconfigured, and retries on a long timer' do
+    it "does not spawn, reports unconfigured, and retries on a long timer" do
       pump.start(now: 100)
 
       expect(spawned).to be_empty
@@ -307,31 +307,31 @@ RSpec.describe VisionHub::FramePump do
       expect(pump.status).to eq(:unconfigured)
     end
 
-    it 'starts spawning as soon as the keyring entry exists' do
-      store = Fakes::Secrets.new('front' => nil)
+    it "starts spawning as soon as the keyring entry exists" do
+      store = Fakes::Secrets.new("front" => nil)
       pump = build_pump(role: :sub, fps: 5, hwaccel: true, input_strategy: :argv, secrets: store)
 
       pump.start(now: 0)
-      store.reveal!('front', 'late')
+      store.reveal!("front", "late")
       pump.tick(now: described_class::UNCONFIGURED_RETRY + 1)
 
       expect(spawned.size).to eq(1)
     end
   end
 
-  describe 'anonymous cameras' do
-    let(:camera) { VisionHub::Camera.from_hash({ 'id' => 'anon', 'host' => '10.0.0.9' }, 0) }
+  describe "anonymous cameras" do
+    let(:camera) { VisionHub::Camera.from_hash({ "id" => "anon", "host" => "10.0.0.9" }, 0) }
     let(:secrets) do
       store = instance_double(VisionHub::SecretStore)
-      allow(store).to receive(:lookup).and_raise(RuntimeError, 'must never be called')
+      allow(store).to receive(:lookup).and_raise(RuntimeError, "must never be called")
       store
     end
 
-    it 'spawns without consulting the keyring' do
+    it "spawns without consulting the keyring" do
       pump.start(now: 0)
 
       expect(spawned.size).to eq(1)
-      expect(spawned[0].join(' ')).to include('rtsp://10.0.0.9:554/stream2')
+      expect(spawned[0].join(" ")).to include("rtsp://10.0.0.9:554/stream2")
     end
   end
 end

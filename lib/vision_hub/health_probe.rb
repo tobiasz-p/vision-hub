@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'socket'
+require "socket"
 
 module VisionHub
   # Reachability check for one camera: a non-blocking TCP connect to the RTSP

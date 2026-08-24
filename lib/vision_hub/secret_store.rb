@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'open3'
+require "open3"
 
 module VisionHub
   # Looks camera passwords up in the user's keyring through secret-tool.
@@ -8,8 +8,8 @@ module VisionHub
   # The password travels only on stdout of the child process; it never appears
   # in an argument list, a log line, or an exception message.
   class SecretStore
-    APPLICATION_ATTR = 'application'
-    CAMERA_ATTR = 'camera'
+    APPLICATION_ATTR = "application"
+    CAMERA_ATTR = "camera"
 
     # Returns [ok, stdout]. Kept injectable so specs can stub lookups without
     # touching gnome-keyring.
@@ -33,7 +33,7 @@ module VisionHub
       cached = @cache[camera_id]
       return cached unless cached.nil?
 
-      value = fetch_keyring(camera_id) || (camera_id == 'default' ? nil : lookup('default'))
+      value = fetch_keyring(camera_id) || (camera_id == "default" ? nil : lookup("default"))
       @cache[camera_id] = value unless value.nil?
       value
     end
@@ -65,7 +65,7 @@ module VisionHub
     end
 
     def lookup_argv(camera_id)
-      ['secret-tool', 'lookup', APPLICATION_ATTR, @application_id, CAMERA_ATTR, camera_id]
+      ["secret-tool", "lookup", APPLICATION_ATTR, @application_id, CAMERA_ATTR, camera_id]
     end
   end
 end

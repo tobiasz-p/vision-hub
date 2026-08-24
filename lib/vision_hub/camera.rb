@@ -10,8 +10,8 @@ module VisionHub
   # on the camera object.
   class Camera
     DEFAULT_PORT = 554
-    DEFAULT_MAIN_PATH = '/stream1'
-    DEFAULT_SUB_PATH = '/stream2'
+    DEFAULT_MAIN_PATH = "/stream1"
+    DEFAULT_SUB_PATH = "/stream2"
     ID_PATTERN = /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
 
     attr_reader :index, :id, :name, :host, :port, :username, :main_path, :sub_path, :enabled
@@ -21,21 +21,21 @@ module VisionHub
 
       raise ConfigError, "#{where}: expected an object" unless raw.is_a?(Hash)
 
-      id = require_string(raw, 'id', where)
+      id = require_string(raw, "id", where)
       unless id.match?(ID_PATTERN)
         raise ConfigError, "#{where}.id: #{id.inspect} may only contain letters, digits, dots, dashes, underscores"
       end
 
       new(
-        index: index,
-        id: id,
-        name: optional_string(raw, 'name', where) || id,
-        host: require_string(raw, 'host', where),
+        index:,
+        id:,
+        name: optional_string(raw, "name", where) || id,
+        host: require_string(raw, "host", where),
         port: parse_port(raw, where),
-        username: optional_string(raw, 'username', where),
-        main_path: parse_path(raw, 'mainPath', DEFAULT_MAIN_PATH, where),
-        sub_path: parse_path(raw, 'subPath', DEFAULT_SUB_PATH, where),
-        enabled: raw.key?('enabled') ? raw.fetch('enabled') != false : true
+        username: optional_string(raw, "username", where),
+        main_path: parse_path(raw, "mainPath", DEFAULT_MAIN_PATH, where),
+        sub_path: parse_path(raw, "subPath", DEFAULT_SUB_PATH, where),
+        enabled: raw.key?("enabled") ? raw.fetch("enabled") != false : true
       )
     end
 
@@ -56,7 +56,7 @@ module VisionHub
     end
 
     def self.parse_port(raw, where)
-      value = raw.fetch('port', DEFAULT_PORT)
+      value = raw.fetch("port", DEFAULT_PORT)
       unless value.is_a?(Integer) && value.between?(1, 65_535)
         raise ConfigError, "#{where}.port must be an integer between 1 and 65535"
       end
@@ -66,7 +66,7 @@ module VisionHub
 
     def self.parse_path(raw, key, fallback, where)
       value = raw.fetch(key, fallback)
-      unless value.is_a?(String) && value.start_with?('/')
+      unless value.is_a?(String) && value.start_with?("/")
         raise ConfigError, "#{where}.#{key} must be a string beginning with /"
       end
 
@@ -116,7 +116,7 @@ module VisionHub
     # Percent-encode everything outside RFC 3986's unreserved set so usernames
     # and passwords containing :, @, /, %, spaces, or UTF-8 stay intact.
     def self.percent_encode(value)
-      value.b.gsub(/[^A-Za-z0-9._~-]/n) { |byte| format('%%%02X', byte.ord) }
+      value.b.gsub(/[^A-Za-z0-9._~-]/n) { |byte| format("%%%02X", byte.ord) }
     end
   end
 end

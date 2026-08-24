@@ -89,7 +89,7 @@ module VisionHub
         reap_child(now)
       else
         @stop_deadline = now + STOP_GRACE
-        signal('TERM')
+        signal("TERM")
       end
     end
 
@@ -107,20 +107,20 @@ module VisionHub
     # ---- argv construction (exposed for specs and the spike) ----
 
     def build_argv(url)
-      argv = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning']
-      argv += ['-fflags', '+genpts+discardcorrupt+nobuffer', '-flags', 'low_delay']
-      argv += ['-hwaccel', 'auto'] if @hwaccel
+      argv = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "warning"]
+      argv += ["-fflags", "+genpts+discardcorrupt+nobuffer", "-flags", "low_delay"]
+      argv += ["-hwaccel", "auto"] if @hwaccel
       argv += input_argv(url)
       if @role == :sub
-        argv + ['-an', '-sn', '-dn', '-vf', 'scale=640:-1', '-frames:v', '1',
-                '-q:v', '6', '-atomic_writing', '1', '-y', frame_path]
+        argv + ["-an", "-sn", "-dn", "-vf", "scale=640:-1", "-frames:v", "1",
+                "-q:v", "6", "-atomic_writing", "1", "-y", frame_path]
       else
-        video_out = ['-map', '0:v:0', '-an', '-sn', '-dn', '-vf', "fps=#{@fps},scale=1920:-1",
-                     '-q:v', '4', '-atomic_writing', '1', '-update', '1', '-y', frame_path]
+        video_out = ["-map", "0:v:0", "-an", "-sn", "-dn", "-vf", "fps=#{@fps},scale=1920:-1",
+                     "-q:v", "4", "-atomic_writing", "1", "-update", "1", "-y", frame_path]
         if @audio
-          audio_out = ['-map', '0:a:0?', '-vn', '-sn', '-dn',
-                       '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2',
-                       '-f', 'pulse', 'VisionHub']
+          audio_out = ["-map", "0:a:0?", "-vn", "-sn", "-dn",
+                       "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2",
+                       "-f", "pulse", "VisionHub"]
           argv + video_out + audio_out
         else
           argv + video_out
@@ -137,11 +137,11 @@ module VisionHub
     def input_argv(url)
       case @input_strategy
       when :argv
-        ['-rtsp_transport', 'tcp', '-timeout', FramePump::RTSP_TIMEOUT_US.to_s,
-         '-probesize', '128000', '-analyzeduration', '200000', '-i', url]
+        ["-rtsp_transport", "tcp", "-timeout", FramePump::RTSP_TIMEOUT_US.to_s,
+         "-probesize", "128000", "-analyzeduration", "200000", "-i", url]
       when :concat_file
         write_playlist(url)
-        ['-f', 'concat', '-safe', '0', '-i', playlist_path]
+        ["-f", "concat", "-safe", "0", "-i", playlist_path]
       else
         raise ArgumentError, "unknown input strategy #{@input_strategy.inspect}"
       end
@@ -150,7 +150,7 @@ module VisionHub
     def reset_process_state
       @pid = nil
       @stderr_io = nil
-      @stderr_tail = +''
+      @stderr_tail = +""
       @status = :idle
       @attempts = 0
       @next_action_at = nil
@@ -219,7 +219,7 @@ module VisionHub
 
     def finish_child(process_status, now, intentional:)
       exit_code = process_status.respond_to?(:exitstatus) ? process_status.exitstatus : process_status.to_i
-      log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? 'stopped' : 'died'})")
+      log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? "stopped" : "died"})")
       if intentional
         finish_intentional(exit_code, now)
       elsif @role == :sub && exit_code.zero?
@@ -267,7 +267,7 @@ module VisionHub
 
       if @kill_deadline.nil?
         log(:warn, "pid #{@pid} ignored TERM; sending KILL")
-        signal('KILL')
+        signal("KILL")
         @kill_deadline = now + KILL_GRACE
       else
         log(:warn, "pid #{@pid} unkillable; abandoning wait")
@@ -286,7 +286,7 @@ module VisionHub
     def drop_stale_playlist
       return if @input_strategy != :concat_file || running?
 
-      require 'fileutils'
+      require "fileutils"
       FileUtils.rm_f(playlist_path)
     rescue StandardError => e
       log(:debug, "playlist cleanup failed: #{e.message}")
@@ -323,7 +323,7 @@ module VisionHub
 
     def keep_last_lines
       lines = @stderr_tail.lines
-      @stderr_tail = +''
+      @stderr_tail = +""
       lines.last(4).each { |line| @stderr_tail << line }
     end
 
@@ -350,7 +350,7 @@ module VisionHub
     def emit(payload)
       return unless @on_event
 
-      @on_event.call({ camera: @camera.id, role: role }.merge(payload))
+      @on_event.call({ camera: @camera.id, role: }.merge(payload))
     end
 
     def log(level, message)

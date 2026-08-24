@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'json'
+require "json"
 
 module VisionHub
   # Loads and validates cameras.json. A Configuration is always constructible:
@@ -21,7 +21,7 @@ module VisionHub
     end
 
     def self.read_text(path)
-      File.read(path, mode: 'rb', encoding: 'UTF-8')
+      File.read(path, mode: "rb", encoding: "UTF-8")
     rescue StandardError => e
       new([], error: "#{path}: #{e.class}: #{e.message}")
     end
@@ -30,11 +30,11 @@ module VisionHub
       cameras = []
       begin
         raw = JSON.parse(text)
-        unless raw.is_a?(Hash) && raw['cameras'].is_a?(Array)
+        unless raw.is_a?(Hash) && raw["cameras"].is_a?(Array)
           raise ConfigError, 'top level must be an object with a "cameras" array'
         end
 
-        cameras = raw['cameras'].each_with_index.map { |entry, index| Camera.from_hash(entry, index) }
+        cameras = raw["cameras"].each_with_index.map { |entry, index| Camera.from_hash(entry, index) }
         assert_unique_ids(cameras)
       rescue ConfigError => e
         return new(cameras, error: e.message)

@@ -8,39 +8,39 @@
 # Protocol: JSON lines on stdin/stdout (see lib/vision_hub/ipc.rb). EOF on
 # stdin — or our own death — takes all children down with us.
 
-require 'optparse'
-require_relative 'lib/vision_hub'
+require "optparse"
+require_relative "lib/vision_hub"
 
 $stdout.sync = true
 $stderr.sync = true
 
-trap('INT') { exit }
-trap('TERM') { exit }
+trap("INT") { exit }
+trap("TERM") { exit }
 
 options = {
   fps: 5,
   main_fps: 15,
-  quality: 'hd',
+  quality: "hd",
   hwaccel: true,
   input_strategy: :argv,
   probe_interval: VisionHub::Supervisor::DEFAULT_PROBE_INTERVAL
 }
 parser = OptionParser.new do |opts|
-  opts.banner = 'Usage: daemon.rb --config PATH --runtime-dir DIR [options]'
-  opts.on('--config PATH', 'cameras.json path') { |v| options[:config] = v }
-  opts.on('--runtime-dir DIR', 'tmpfs directory for frames and playlists') { |v| options[:runtime_dir] = v }
-  opts.on('--fps N', Integer, 'sub-stream target fps') { |v| options[:fps] = v }
-  opts.on('--main-fps N', Integer, 'focused-stream target fps') { |v| options[:main_fps] = v }
-  opts.on('--quality PRESET', String, 'focused-stream quality (eco, hd, ultra, max)') { |v| options[:quality] = v }
-  opts.on('--no-hwaccel', 'disable hardware decode') { options[:hwaccel] = false }
-  opts.on('--input STRATEGY', %w[argv concat_file], 'credential delivery strategy') do |v|
+  opts.banner = "Usage: daemon.rb --config PATH --runtime-dir DIR [options]"
+  opts.on("--config PATH", "cameras.json path") { |v| options[:config] = v }
+  opts.on("--runtime-dir DIR", "tmpfs directory for frames and playlists") { |v| options[:runtime_dir] = v }
+  opts.on("--fps N", Integer, "sub-stream target fps") { |v| options[:fps] = v }
+  opts.on("--main-fps N", Integer, "focused-stream target fps") { |v| options[:main_fps] = v }
+  opts.on("--quality PRESET", String, "focused-stream quality (eco, hd, ultra, max)") { |v| options[:quality] = v }
+  opts.on("--no-hwaccel", "disable hardware decode") { options[:hwaccel] = false }
+  opts.on("--input STRATEGY", %w[argv concat_file], "credential delivery strategy") do |v|
     options[:input_strategy] = v.to_sym
   end
 end
 parser.parse(ARGV)
 
-abort('missing --config') unless options[:config]
-abort('missing --runtime-dir') unless options[:runtime_dir]
+abort("missing --config") unless options[:config]
+abort("missing --runtime-dir") unless options[:runtime_dir]
 
 # A broken or missing cameras.json is a setup state, not a crash: the daemon
 # stays alive, reports the problem once, and answers commands so the UI can
@@ -53,7 +53,7 @@ warn "vision-hub: config error: #{config.error}" unless config.ok?
 # shell never carries chatter.
 logger = Class.new do
   %i[info warn error].each do |level|
-    define_method(level) { |message| warn({ ts: VisionHub::Clock.now.round(3), level: level, msg: message }.to_json) }
+    define_method(level) { |message| warn({ ts: VisionHub::Clock.now.round(3), level:, msg: message }.to_json) }
   end
 
   def debug(_message) = nil
@@ -62,14 +62,14 @@ end.new
 supervisor = VisionHub::Supervisor.new(
   cameras: config.active_cameras,
   runtime_dir: options[:runtime_dir],
-  secrets: VisionHub::SecretStore.new(application_id: 'tobiasz-p.vision-hub'),
+  secrets: VisionHub::SecretStore.new(application_id: "tobiasz-p.vision-hub"),
   fps: options[:fps],
   main_fps: options[:main_fps],
   quality: options[:quality],
   hwaccel: options[:hwaccel],
   input_strategy: options[:input_strategy],
   probe_interval: options[:probe_interval],
-  logger: logger
+  logger:
 )
 reader = VisionHub::Ipc::Reader.new
 

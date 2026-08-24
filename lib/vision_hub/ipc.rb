@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'json'
+require "json"
 
 module VisionHub
   # Line-delimited JSON framing for the daemon's stdin/stdout protocol.
@@ -18,12 +18,13 @@ module VisionHub
       "#{JSON.generate(payload)}\n"
     end
 
+    # Incremental JSON-lines parser with size bounds checking.
     class Reader
       Result = Struct.new(:kind, :message, :detail, keyword_init: true)
 
       def initialize(max_line_bytes: MAX_LINE_BYTES)
         @max_line_bytes = max_line_bytes
-        @buffer = +''
+        @buffer = +""
         @discarding = false
       end
 
@@ -48,7 +49,7 @@ module VisionHub
               results << Result.new(kind: :oversize, detail:)
             end
           elsif (message = parse_object(line))
-            results << Result.new(kind: :message, message: message)
+            results << Result.new(kind: :message, message:)
           else
             results << Result.new(kind: :invalid, detail: truncate(line))
           end
