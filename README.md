@@ -113,6 +113,8 @@ omarchy bar set tobiasz-p.vision-hub targetFps 10
 | **Left Click (Bar Widget)** | Toggle live-view floating window |
 | **Right Click (Bar Widget)** | Force immediate network health re-probe |
 | **Click (Camera Tile)** | Switch to focused single-camera view (high-fps main stream) |
+| **Press `←` / `→` Arrow (Cinema View)** | Cycle to previous / next camera |
+| **Press `1`-`9` (Cinema View)** | Switch directly to camera by position |
 | **Click `← Grid` or Press `Esc` (Focused View)** | Return to multi-camera grid |
 | **Press `Esc` (Grid View)** | Close live-view window |
 
