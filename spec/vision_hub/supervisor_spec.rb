@@ -241,15 +241,33 @@ RSpec.describe VisionHub::Supervisor do
       expect(supervisor.drain_outbox.last).to include(event: :error, message: include("explode"))
     end
 
-    it "toggles audio playback on and off on the focused mainstream pump" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 1)
-      expect(pumps_by_id_role[["front", :main]].kwargs[:audio]).to be(false)
+    it "cycles to next and previous cameras in order" do
+      supervisor.handle({ "cmd" => "next" }, now: 1)
+      expect(pumps_by_id_role[["front", :main]].running?).to be(true)
 
-      supervisor.handle({ "cmd" => "audio", "camera" => "front", "enabled" => true }, now: 2)
-      expect(pumps_by_id_role[["front", :main]].kwargs[:audio]).to be(true)
+      supervisor.handle({ "cmd" => "next" }, now: 2)
+      expect(pumps_by_id_role[["garage", :main]].running?).to be(true)
 
-      supervisor.handle({ "cmd" => "audio", "camera" => "front", "enabled" => false }, now: 3)
-      expect(pumps_by_id_role[["front", :main]].kwargs[:audio]).to be(false)
+      supervisor.handle({ "cmd" => "prev" }, now: 3)
+      expect(pumps_by_id_role[["front", :main]].running?).to be(true)
+    end
+
+    it "emits summary and frame_url on state publication" do
+      probe_results["front"] = :online
+      probe_results["garage"] = :online
+      supervisor.tick(now: 11)
+      supervisor.tick(now: 21)
+
+      events = supervisor.drain_outbox
+      summary = events.rfind { |e| e[:event] == :summary }
+      expect(summary).to include(
+        total: 2, online: 2, offline: 0,
+        all_healthy: true, any_offline: false
+      )
+      expect(summary[:tooltip]).to include("front", "garage", "Left-click: open grid")
+
+      camera_event = events.find { |e| e[:event] == :camera_state }
+      expect(camera_event).to include(frame_url: include("file:///run/vision-hub/"))
     end
   end
 end

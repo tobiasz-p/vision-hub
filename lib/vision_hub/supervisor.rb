@@ -49,6 +49,9 @@ module VisionHub
       "refresh" => :handle_refresh,
       "focus" => :handle_focus,
       "unfocus" => :handle_unfocus,
+      "next" => :handle_next,
+      "prev" => :handle_prev,
+      "cycle" => :handle_cycle,
       "set_fps" => :handle_fps,
       "audio" => :handle_audio,
       "window" => :handle_window
@@ -69,6 +72,9 @@ module VisionHub
     def handle_refresh(_msg) = refresh_all
     def handle_focus(message) = focus(message["camera"], fps: message["fps"]&.to_i, audio: message["audio"])
     def handle_unfocus(_msg) = unfocus
+    def handle_next(_msg) = cycle_camera(:next)
+    def handle_prev(_msg) = cycle_camera(:prev)
+    def handle_cycle(message) = cycle_camera(message["direction"] == "prev" ? :prev : :next)
     def handle_fps(message) = change_fps(message["fps"])
     def handle_audio(message) = toggle_audio(message["camera"], message["enabled"] == true)
     def handle_window(message) = update_window_state(message["open"] == true)
@@ -239,17 +245,30 @@ module VisionHub
       focus(camera_id || @focused_id, audio: @audio_enabled) if @focused_id
     end
 
+    def cycle_camera(direction = :next)
+      return if @cameras.empty?
+
+      ids = @cameras.map(&:id)
+      current_idx = ids.index(@focused_id) || -1
+      next_idx = direction == :prev ? (current_idx - 1) % ids.size : (current_idx + 1) % ids.size
+      focus(ids[next_idx])
+    end
+
     def unfocus(immediate: false)
       stop_current_focus(immediate:)
     end
 
     # ---- state publication ----
 
-    # Emits camera_state only for cameras whose observable state actually
-    # changed, so a quiet system produces no traffic toward the shell.
+    # Emits camera_state and summary only when observable state actually changed.
     def publish_changes
       return unless @ready
 
+      publish_camera_changes
+      publish_summary_changes
+    end
+
+    def publish_camera_changes
       @states.each_key do |id|
         current = compute_state(id)
         next if @last_emitted[id] == current
@@ -259,11 +278,62 @@ module VisionHub
       end
     end
 
+    def publish_summary_changes
+      current = compute_summary
+      return if @last_summary == current
+
+      @last_summary = current
+      emit(:summary, **current)
+    end
+
+    def compute_summary
+      states = @states.values
+      total = states.size
+      online = states.count { |s| s[:online] == true }
+      offline = states.count { |s| s[:online] == false }
+      streaming = states.count { |s| s[:streaming] }
+      all_healthy = total.positive? && online == total
+      any_offline = total.positive? && online < total
+
+      {
+        total:, online:, offline:, streaming:,
+        all_healthy:, any_offline:,
+        tooltip: build_tooltip(states, total)
+      }
+    end
+
+    def build_tooltip(states, total)
+      return "VisionHub — no cameras configured\nAdd ~/.config/vision-hub/cameras.json" if total.zero?
+
+      lines = states.map { |state| format_camera_tooltip(state) }
+      lines << "Left-click: open grid · Right-click: re-probe"
+      lines.join("\n")
+    end
+
+    def format_camera_tooltip(state)
+      mark = status_mark(state[:online])
+      line = "#{mark} #{state[:id]}"
+      if state[:error] then "#{line} (#{state[:error]})"
+      elsif state[:online] == false then "#{line} (offline)"
+      elsif state[:streaming] then "#{line} (live)"
+      else line
+      end
+    end
+
+    def status_mark(online)
+      case online
+      when true then "●"
+      when false then "✕"
+      else "○"
+      end
+    end
+
     def compute_state(id)
       entry = @pumps.fetch(id, {})
       {
         id:,
         name: @states[id][:name],
+        frame_url: "file://#{@runtime_dir}/#{id}.jpg",
         online: @states[id][:online],
         streaming: [entry[:sub], entry[:main]].compact.any?(&:running?),
         error: @states[id][:error]
@@ -292,6 +362,7 @@ module VisionHub
       @outbox = []
       @focused_id = nil
       @last_emitted = {}
+      @last_summary = nil
       @ready = false
     end
 
