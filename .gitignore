@@ -1,0 +1,21 @@
+# IDE
+.ruby-lsp/
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ruby
+vendor/
+.bundle/
+*.gem
+tmp/
+
+# Environment
+.env
+.env.*

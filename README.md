@@ -92,8 +92,9 @@ Settings can be customized via `omarchy bar set`:
 | Setting | Default | Description |
 |---|---|---|
 | `gridColumns` | `3` | Number of columns in the multi-camera grid (`1` to `6`) |
-| `targetFps` | `5` | Target FPS for substream grid tiles (`1` to `15`) |
-| `mainFps` | `10` | Target FPS for focused single-camera stream (`1` to `30`) |
+| `targetFps` | `2` | Target FPS for substream grid tiles (`1` to `10`) |
+| `mainFps` | `15` | Target FPS for focused single-camera stream (`1` to `30`) |
+| `audioEnabled` | `false` | Play audio by default in cinema view |
 | `hwaccel` | `true` | Enable hardware-accelerated video decoding |
 | `showOfflineCameras` | `true` | Show offline/unreachable cameras in the grid view |
 
