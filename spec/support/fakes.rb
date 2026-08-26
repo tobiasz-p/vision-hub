@@ -38,8 +38,8 @@ module Fakes
     end
 
     def start(now:)
-      @events << [:start, now]
-      case @start_mode
+      events << [:start, now]
+      case start_mode
       when :unconfigured then fire(event: :unconfigured)
       else
         @running = true
@@ -49,11 +49,11 @@ module Fakes
 
     def stop(now:, immediate: false)
       @running = false
-      @events << [:stop, now, immediate]
+      events << [:stop, now, immediate]
       fire(event: :exited, code: 0, intentional: true, error: nil)
     end
 
-    def tick(now:) = @events << [:tick, now]
+    def tick(now:) = events << [:tick, now]
 
     def running? = @running
 

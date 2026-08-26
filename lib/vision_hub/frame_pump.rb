@@ -54,7 +54,7 @@ module VisionHub
     end
 
     def frame_path
-      File.join(@runtime_dir, "#{@camera.id}.jpg")
+      File.join(@runtime_dir, "#{camera.id}.jpg")
     end
 
     def on_event(&block)
@@ -109,15 +109,15 @@ module VisionHub
     def build_argv(url)
       argv = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "warning"]
       argv += ["-fflags", "+genpts+discardcorrupt+nobuffer", "-flags", "low_delay"]
-      argv += ["-hwaccel", "auto"] if @hwaccel
+      argv += ["-hwaccel", "auto"] if hwaccel
       argv += input_argv(url)
-      if @role == :sub
+      if role == :sub
         argv + ["-an", "-sn", "-dn", "-vf", "scale=640:-1", "-frames:v", "1",
                 "-q:v", "6", "-atomic_writing", "1", "-y", frame_path]
       else
-        video_out = ["-map", "0:v:0", "-an", "-sn", "-dn", "-vf", "fps=#{@fps},scale=1920:-1",
+        video_out = ["-map", "0:v:0", "-an", "-sn", "-dn", "-vf", "fps=#{fps},scale=1920:-1",
                      "-q:v", "4", "-atomic_writing", "1", "-update", "1", "-y", frame_path]
-        if @audio
+        if audio
           audio_out = ["-map", "0:a:0?", "-vn", "-sn", "-dn",
                        "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2",
                        "-f", "pulse", "VisionHub"]
@@ -135,7 +135,7 @@ module VisionHub
     end
 
     def input_argv(url)
-      case @input_strategy
+      case input_strategy
       when :argv
         ["-rtsp_transport", "tcp", "-timeout", FramePump::RTSP_TIMEOUT_US.to_s,
          "-probesize", "128000", "-analyzeduration", "200000", "-i", url]
@@ -143,7 +143,7 @@ module VisionHub
         write_playlist(url)
         ["-f", "concat", "-safe", "0", "-i", playlist_path]
       else
-        raise ArgumentError, "unknown input strategy #{@input_strategy.inspect}"
+        raise ArgumentError, "unknown input strategy #{input_strategy.inspect}"
       end
     end
 
@@ -164,7 +164,7 @@ module VisionHub
 
     def attempt_spawn(now)
       password = lookup_password
-      if password.nil? && @camera.wants_password?
+      if password.nil? && camera.wants_password?
         mark_unconfigured(now)
         return
       end
@@ -184,17 +184,17 @@ module VisionHub
     end
 
     def lookup_password
-      return nil unless @camera.wants_password?
+      return nil unless camera.wants_password?
 
-      pw = @secrets&.lookup(@camera.id)
+      pw = @secrets&.lookup(camera.id)
       @last_error = nil if pw
       pw
     end
 
     def build_url(password)
-      return @camera.mainstream_url(password) if role == :main
+      return camera.mainstream_url(password) if role == :main
 
-      @camera.substream_url(password)
+      camera.substream_url(password)
     end
 
     def spawn_child(argv, now)
@@ -222,7 +222,7 @@ module VisionHub
       log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? "stopped" : "died"})")
       if intentional
         finish_intentional(exit_code, now)
-      elsif @role == :sub && exit_code.zero?
+      elsif role == :sub && exit_code.zero?
         close_child
         @status = :stopped
         emit(event: :exited, code: exit_code, intentional: true, error: nil)
@@ -284,7 +284,7 @@ module VisionHub
     end
 
     def drop_stale_playlist
-      return if @input_strategy != :concat_file || running?
+      return if input_strategy != :concat_file || running?
 
       require "fileutils"
       FileUtils.rm_f(playlist_path)
@@ -336,7 +336,7 @@ module VisionHub
     # ---- playlist (:concat_file strategy) ----
 
     def playlist_path
-      File.join(@runtime_dir, "#{@camera.id}.#{role}.ffconcat")
+      File.join(@runtime_dir, "#{camera.id}.#{role}.ffconcat")
     end
 
     def write_playlist(url)
@@ -350,11 +350,11 @@ module VisionHub
     def emit(payload)
       return unless @on_event
 
-      @on_event.call({ camera: @camera.id, role: }.merge(payload))
+      @on_event.call({ camera: camera.id, role: }.merge(payload))
     end
 
     def log(level, message)
-      @logger&.public_send(level, "[pump #{@camera.id}/#{role}] #{message}")
+      @logger&.public_send(level, "[pump #{camera.id}/#{role}] #{message}")
     end
   end
 end

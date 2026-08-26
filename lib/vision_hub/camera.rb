@@ -87,30 +87,30 @@ module VisionHub
     end
 
     def enabled?
-      @enabled
+      enabled
     end
 
     def wants_password?
-      !@username.nil?
+      !username.nil?
     end
 
     # RTSP URL for the given stream path. +password+ may be nil for anonymous
     # cameras. Credentials are percent-encoded; they exist only inside the
     # returned string and are never logged or persisted by this class.
     def url_for(path, password = nil)
-      authority = "#{@host}:#{@port}"
-      if @username
-        authority = "#{self.class.percent_encode(@username)}:#{self.class.percent_encode(password.to_s)}@#{authority}"
+      authority = "#{host}:#{port}"
+      if username
+        authority = "#{self.class.percent_encode(username)}:#{self.class.percent_encode(password.to_s)}@#{authority}"
       end
       "rtsp://#{authority}#{path}"
     end
 
     def mainstream_url(password = nil)
-      url_for(@main_path, password)
+      url_for(main_path, password)
     end
 
     def substream_url(password = nil)
-      url_for(@sub_path, password)
+      url_for(sub_path, password)
     end
 
     # Percent-encode everything outside RFC 3986's unreserved set so usernames

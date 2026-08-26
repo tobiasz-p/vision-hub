@@ -66,11 +66,11 @@ module VisionHub
     end
 
     def ok?
-      @error.nil?
+      error.nil?
     end
 
     def active_cameras
-      @cameras.select(&:enabled?)
+      cameras.select(&:enabled?)
     end
 
     def camera_by_id(id)
