@@ -8,6 +8,24 @@ Live view and health monitoring of RTSP IP cameras directly in your Omarchy shel
 
 ---
 
+## Showcase
+
+### Multi-Camera Grid View
+Configurable live overview of all surveillance feeds with instant reachability status pills and custom camera naming.
+
+<p align="center">
+  <img src="docs/assets/grid.png" alt="Multi-Camera Grid View" width="720" />
+</p>
+
+### Focused Cinema Live View
+High-framerate focused stream with interactive FPS switcher, live RTSP audio playback toggle, HUD telemetry, and bottom carousel strip navigation.
+
+<p align="center">
+  <img src="docs/assets/cinema-garage.png" alt="Focused Cinema Live View" width="720" />
+</p>
+
+---
+
 ## Features
 
 - **Top Bar Health Widget**: Compact status pill displaying active online camera count (e.g. `󰹗 4/4`), offline warnings, and hover tooltips with detailed status for each configured camera.
