@@ -14,66 +14,127 @@ RSpec.describe VisionHub::SecretStore do
     end
   end
 
-  it "looks a password up with attribute-style arguments" do
-    lookup_result.replace([true, "s3cret\n", ""])
+  describe "#lookup" do
+    subject(:secret) { store.lookup(camera_id) }
 
-    expect(store.lookup("front")).to eq("s3cret")
-    expect(calls.last).to eq(["secret-tool", "lookup", "application", "tobiasz-p.vision-hub", "camera", "front"])
-  end
+    let(:camera_id) { "front" }
 
-  it "returns nil when the keyring has no entry" do
-    lookup_result.replace([false, "", "No result"])
+    context "when credential exists in the keyring" do
+      let(:lookup_result) { [true, "s3cret\n", ""] }
 
-    expect(store.lookup("front")).to be_nil
-  end
-
-  it "treats an empty stdout as missing even on success" do
-    lookup_result.replace([true, "\n", ""])
-
-    expect(store.lookup("front")).to be_nil
-  end
-
-  it "caches hits but re-asks misses so later keyring entries are found" do
-    lookup_result.replace([true, "pw", ""])
-    expect(store.lookup("front")).to eq("pw")
-
-    lookup_result.replace([false, "", ""])
-    expect(store.lookup("front")).to eq("pw") # cached hit, no new call
-    expect(store.lookup("garage")).to be_nil
-    expect(calls.size).to eq(3) # 'front', 'garage', and fallback 'default'
-
-    # The user adds the missing entry; the next retry must see it.
-    lookup_result.replace([true, "late", ""])
-    expect(store.lookup("garage")).to eq("late")
-    expect(calls.size).to eq(4)
-  end
-
-  it "re-queries after clear_cache!" do
-    lookup_result.replace([true, "old", ""])
-    store.lookup("front")
-
-    lookup_result.replace([true, "new", ""])
-    store.clear_cache!
-
-    expect(store.lookup("front")).to eq("new")
-  end
-
-  it "falls back to default camera secret when specific camera is not in keyring" do
-    lookup_map = { "default" => [true, "shared_pass", ""] }
-    custom_runner = lambda do |argv|
-      cam = argv[argv.index("camera") + 1]
-      lookup_map[cam] || [false, "", "No result"]
+      it "returns the secret and invokes secret-tool with attribute-style arguments" do
+        expect(secret).to eq("s3cret")
+        expect(calls.last).to eq(["secret-tool", "lookup", "application", "tobiasz-p.vision-hub", "camera", "front"])
+      end
     end
-    store = described_class.new(application_id: "tobiasz-p.vision-hub", runner: custom_runner)
 
-    expect(store.lookup("cam2")).to eq("shared_pass")
+    context "when the keyring has no entry" do
+      let(:lookup_result) { [false, "", "No result"] }
+
+      it "returns nil" do
+        expect(secret).to be_nil
+      end
+    end
+
+    context "when keyring returns empty stdout on success" do
+      let(:lookup_result) { [true, "\n", ""] }
+
+      it "returns nil" do
+        expect(secret).to be_nil
+      end
+    end
+
+    context "when queried repeatedly" do
+      it "caches hits and re-queries misses" do
+        lookup_result.replace([true, "pw", ""])
+        expect(store.lookup("front")).to eq("pw")
+
+        lookup_result.replace([false, "", ""])
+        expect(store.lookup("front")).to eq("pw")
+        expect(store.lookup("garage")).to be_nil
+        expect(calls.size).to eq(3)
+
+        lookup_result.replace([true, "late", ""])
+        expect(store.lookup("garage")).to eq("late")
+        expect(calls.size).to eq(4)
+      end
+    end
+
+    context "when specific camera is missing but default camera secret exists" do
+      let(:lookup_map) { { "default" => [true, "shared_pass", ""] } }
+      let(:runner) do
+        lambda do |argv|
+          cam = argv[argv.index("camera") + 1]
+          lookup_map[cam] || [false, "", "No result"]
+        end
+      end
+      let(:camera_id) { "cam2" }
+
+      it "falls back to default camera secret" do
+        expect(secret).to eq("shared_pass")
+      end
+    end
   end
 
-  it "builds a store hint containing attributes but no secret material" do
-    command = store.store_command_for("front")
+  describe "#configured?" do
+    subject(:configured?) { store.configured?(camera_id) }
 
-    expect(command).to include("secret-tool store --label='VisionHub camera front'")
-    expect(command).to include("application tobiasz-p.vision-hub camera front")
-    expect(command).not_to include("s3cret")
+    let(:camera_id) { "front" }
+
+    context "when credential exists" do
+      let(:lookup_result) { [true, "secret\n", ""] }
+
+      it "returns true" do
+        expect(configured?).to be true
+      end
+    end
+
+    context "when credential is missing" do
+      let(:lookup_result) { [false, "", "No result"] }
+
+      it "returns false" do
+        expect(configured?).to be false
+      end
+    end
+  end
+
+  describe "#clear_cache!" do
+    subject(:clear_cache) { store.clear_cache! }
+
+    before do
+      lookup_result.replace([true, "old", ""])
+      store.lookup("front")
+      lookup_result.replace([true, "new", ""])
+    end
+
+    context "when cache has existing entries" do
+      it "re-queries the keyring on subsequent lookups" do
+        clear_cache
+
+        expect(store.lookup("front")).to eq("new")
+      end
+    end
+  end
+
+  describe ".store_command" do
+    subject(:command) { described_class.store_command("app-id", "cam1") }
+
+    it "formats the secret-tool command line" do
+      expect(command).to eq("secret-tool store --label='VisionHub camera cam1' application app-id camera cam1")
+    end
+  end
+
+  describe "#store_command_for" do
+    subject(:command) { store.store_command_for(camera_id) }
+
+    let(:camera_id) { "front" }
+
+    context "when generating the store hint" do
+      it "builds a command containing attributes but no secret material" do
+        expect(command).to include("secret-tool store --label='VisionHub camera front'")
+        expect(command).to include("application tobiasz-p.vision-hub camera front")
+        expect(command).not_to include("s3cret")
+      end
+    end
   end
 end

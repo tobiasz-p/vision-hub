@@ -5,91 +5,127 @@ require "tmpdir"
 
 RSpec.describe VisionHub::Configuration do
   describe ".parse" do
-    it "parses a valid document and keeps only enabled cameras active" do
-      config = described_class.parse(<<~JSON)
-        {
-          "cameras": [
-            { "id": "front", "name": "Front door", "host": "10.0.0.5" },
-            { "id": "garage", "host": "10.0.0.6", "enabled": false }
-          ]
-        }
-      JSON
+    subject(:config) { described_class.parse(json) }
 
-      expect(config).to be_ok
-      expect(config.cameras.map(&:id)).to eq(%w[front garage])
-      expect(config.active_cameras.map(&:id)).to eq(%w[front])
+    context "with a valid document" do
+      let(:json) do
+        <<~JSON
+          {
+            "cameras": [
+              { "id": "front", "name": "Front door", "host": "10.0.0.5" },
+              { "id": "garage", "host": "10.0.0.6", "enabled": false }
+            ]
+          }
+        JSON
+      end
+
+      it "parses cameras and keeps only enabled cameras active" do
+        expect(config).to be_ok
+        expect(config.cameras.map(&:id)).to eq(%w[front garage])
+        expect(config.active_cameras.map(&:id)).to eq(%w[front])
+      end
     end
 
-    it "reports malformed JSON verbatim" do
-      config = described_class.parse("{nope")
+    context "with malformed JSON" do
+      let(:json) { "{nope" }
 
-      expect(config).not_to be_ok
-      expect(config.error).to include("invalid JSON")
+      it "reports malformed JSON verbatim" do
+        expect(config).not_to be_ok
+        expect(config.error).to include("invalid JSON")
+      end
     end
 
-    it "rejects a top-level array" do
-      config = described_class.parse("[]")
+    context "when top-level is an array" do
+      let(:json) { "[]" }
 
-      expect(config.error).to include('top level must be an object with a "cameras" array')
+      it "rejects top-level array" do
+        expect(config.error).to include('top level must be an object with a "cameras" array')
+      end
     end
 
-    it "rejects a missing cameras key" do
-      config = described_class.parse("{}")
+    context "when cameras key is missing" do
+      let(:json) { "{}" }
 
-      expect(config.error).to include('"cameras" array')
+      it "rejects missing cameras key" do
+        expect(config.error).to include('"cameras" array')
+      end
     end
 
-    it "rejects duplicate ids with both indexes named" do
-      config = described_class.parse(<<~JSON)
-        { "cameras": [{ "id": "front", "host": "a" }, { "id": "front", "host": "b" }] }
-      JSON
+    context "with duplicate camera ids" do
+      let(:json) do
+        <<~JSON
+          { "cameras": [{ "id": "front", "host": "a" }, { "id": "front", "host": "b" }] }
+        JSON
+      end
 
-      expect(config.error).to include('duplicate id "front" (also at index 0)')
+      it "rejects duplicate ids with both indexes named" do
+        expect(config.error).to include('duplicate id "front" (also at index 0)')
+      end
     end
 
-    it "rejects camera counts exceeding MAX_CAMERAS" do
-      cams = (1..(described_class::MAX_CAMERAS + 1)).map { |i| { "id" => "cam#{i}", "host" => "10.0.0.#{i}" } }
-      config = described_class.parse({ "cameras" => cams }.to_json)
+    context "when camera count exceeds MAX_CAMERAS" do
+      let(:cams) { (1..(described_class::MAX_CAMERAS + 1)).map { |i| { "id" => "cam#{i}", "host" => "10.0.0.#{i}" } } }
+      let(:json) { { "cameras" => cams }.to_json }
 
-      expect(config.error).to include("exceeds maximum limit of #{described_class::MAX_CAMERAS}")
+      it "rejects excessive camera counts" do
+        expect(config.error).to include("exceeds maximum limit of #{described_class::MAX_CAMERAS}")
+      end
     end
   end
 
   describe ".load" do
-    it "reads the file from disk" do
-      Dir.mktmpdir do |dir|
-        path = File.join(dir, "cameras.json")
+    subject(:config) { described_class.load(path) }
+
+    context "when file exists" do
+      let(:tmp_dir) { Dir.mktmpdir }
+      let(:path) { File.join(tmp_dir, "cameras.json") }
+
+      before do
         File.write(path, '{ "cameras": [{ "id": "front", "host": "10.0.0.5" }] }')
+      end
 
-        config = described_class.load(path)
+      after do
+        FileUtils.remove_entry(tmp_dir) if File.directory?(tmp_dir)
+      end
 
+      it "reads the configuration from disk" do
         expect(config.camera_by_id("front").host).to eq("10.0.0.5")
       end
     end
 
-    it "survives a missing file with an error attached" do
-      config = described_class.load("/nonexistent/vision-hub/cameras.json")
+    context "when file does not exist" do
+      let(:path) { "/nonexistent/vision-hub/cameras.json" }
 
-      expect(config).not_to be_ok
-      expect(config.error).to include("No such file")
-      expect(config.active_cameras).to be_empty
+      it "survives missing file with an error attached" do
+        expect(config).not_to be_ok
+        expect(config.error).to include("No such file")
+        expect(config.active_cameras).to be_empty
+      end
     end
 
-    it "caps absurdly large files" do
-      Dir.mktmpdir do |dir|
-        path = File.join(dir, "huge.json")
+    context "when file exceeds MAX_BYTES" do
+      let(:tmp_dir) { Dir.mktmpdir }
+      let(:path) { File.join(tmp_dir, "huge.json") }
+
+      before do
         File.binwrite(path, "x" * (described_class::MAX_BYTES + 10))
+      end
 
-        config = described_class.load(path)
+      after do
+        FileUtils.remove_entry(tmp_dir) if File.directory?(tmp_dir)
+      end
 
+      it "caps absurdly large files with an error" do
         expect(config.error).to include("exceeds")
       end
     end
   end
 
   describe "#camera_by_id" do
-    it "looks up among enabled cameras only" do
-      config = described_class.parse(<<~JSON)
+    subject(:found_camera) { config.camera_by_id(camera_id) }
+
+    let(:config) do
+      described_class.parse(<<~JSON)
         {
           "cameras": [
             { "id": "front", "host": "10.0.0.5" },
@@ -97,9 +133,61 @@ RSpec.describe VisionHub::Configuration do
           ]
         }
       JSON
+    end
 
-      expect(config.camera_by_id("front")).to be_a(VisionHub::Camera)
-      expect(config.camera_by_id("off")).to be_nil
+    context "when looking up an enabled camera" do
+      let(:camera_id) { "front" }
+
+      it "returns the camera instance" do
+        expect(found_camera).to be_a(VisionHub::Camera)
+      end
+    end
+
+    context "when looking up a disabled camera" do
+      let(:camera_id) { "off" }
+
+      it "returns nil" do
+        expect(found_camera).to be_nil
+      end
+    end
+  end
+
+  describe "#ok?" do
+    subject(:ok?) { config.ok? }
+
+    context "when configuration is valid" do
+      let(:config) { described_class.new([]) }
+
+      it "returns true" do
+        expect(ok?).to be true
+      end
+    end
+
+    context "when configuration has an error" do
+      let(:config) { described_class.new([], error: "something failed") }
+
+      it "returns false" do
+        expect(ok?).to be false
+      end
+    end
+  end
+
+  describe "#active_cameras" do
+    subject(:active_cameras) { config.active_cameras }
+
+    let(:config) do
+      described_class.parse(<<~JSON)
+        {
+          "cameras": [
+            { "id": "front", "host": "10.0.0.5" },
+            { "id": "off", "host": "10.0.0.6", "enabled": false }
+          ]
+        }
+      JSON
+    end
+
+    it "returns only cameras that are enabled" do
+      expect(active_cameras.map(&:id)).to eq(%w[front])
     end
   end
 end
