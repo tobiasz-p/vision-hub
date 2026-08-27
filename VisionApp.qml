@@ -18,6 +18,8 @@ Item {
   property bool opened: window.visible
   property bool closingFromHost: false
   property string focusedId: ""
+  property string viewMode: "grid"
+  property int fillMode: Image.PreserveAspectFit
   property int columns: 3
   property bool patrolMode: false
   property int streamFps: visionService ? visionService.mainFps : 15
@@ -63,7 +65,19 @@ Item {
     closingFromHost = false
     root.fpsDropdownOpen = false
     window.visible = true
-    if (payload.camera) root.showFocused(String(payload.camera))
+
+    var targetMode = payload.view || payload.defaultView
+    if (payload.camera) {
+      if (targetMode === "hero") root.showHero(String(payload.camera))
+      else root.showCinema(String(payload.camera))
+    } else if (targetMode === "hero") {
+      root.showHero()
+    } else if (targetMode === "cinema") {
+      root.showCinema()
+    } else {
+      root.showGrid()
+    }
+
     windowContent.forceActiveFocus()
   }
 
@@ -81,17 +95,35 @@ Item {
   }
 
   function showFocused(cameraId) {
-    if (!cameraId) return
+    showCinema(cameraId)
+  }
+
+  function showCinema(cameraId) {
+    var targetId = cameraId || root.focusedId || (root.cameraList.length > 0 ? root.cameraList[0] : "")
+    if (!targetId) return
     root.fpsDropdownOpen = false
-    root.focusedId = cameraId
+    root.focusedId = targetId
+    root.viewMode = "cinema"
     if (root.visionService && typeof root.visionService.focusCamera === "function") {
-      root.visionService.focusCamera(cameraId, root.streamFps)
+      root.visionService.focusCamera(targetId, root.streamFps)
+    }
+  }
+
+  function showHero(cameraId) {
+    var targetId = cameraId || root.focusedId || (root.cameraList.length > 0 ? root.cameraList[0] : "")
+    if (!targetId) return
+    root.fpsDropdownOpen = false
+    root.focusedId = targetId
+    root.viewMode = "hero"
+    if (root.visionService && typeof root.visionService.focusCamera === "function") {
+      root.visionService.focusCamera(targetId, root.streamFps)
     }
   }
 
   function showGrid() {
     root.patrolMode = false
     root.fpsDropdownOpen = false
+    root.viewMode = "grid"
     if (root.focusedId !== "" && root.visionService && typeof root.visionService.unfocusCamera === "function") {
       root.visionService.unfocusCamera()
     }
@@ -102,17 +134,37 @@ Item {
     if (cameraList.length === 0) return
     var idx = currentCameraIndex
     var nextIdx = (idx + 1) % cameraList.length
-    showFocused(cameraList[nextIdx])
+    if (root.viewMode === "hero") root.showHero(cameraList[nextIdx])
+    else root.showCinema(cameraList[nextIdx])
   }
 
   function showPrevCamera() {
     if (cameraList.length === 0) return
     var idx = currentCameraIndex
     var prevIdx = (idx - 1 + cameraList.length) % cameraList.length
-    showFocused(cameraList[prevIdx])
+    if (root.viewMode === "hero") root.showHero(cameraList[prevIdx])
+    else root.showCinema(cameraList[prevIdx])
   }
 
-  // Patrol / Auto-Cycle Timer (cycles cameras in focused mode)
+  function toggleAspect() {
+    root.fillMode = root.fillMode === Image.PreserveAspectFit ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+  }
+
+  function takeSnapshot(cameraId) {
+    var targetId = cameraId || root.focusedId
+    if (!targetId && root.cameraList.length > 0) targetId = root.cameraList[0]
+    if (!targetId || !root.visionService || typeof root.visionService.takeSnapshot !== "function") return ""
+    var res = root.visionService.takeSnapshot(targetId)
+    if (cinemaLoader.item && typeof cinemaLoader.item.triggerFlash === "function") {
+      cinemaLoader.item.triggerFlash()
+    }
+    if (heroLoader.item && typeof heroLoader.item.triggerFlash === "function") {
+      heroLoader.item.triggerFlash()
+    }
+    return res
+  }
+
+  // Patrol / Auto-Cycle Timer (cycles cameras in focused/hero mode)
   Timer {
     interval: Theme.animation.patrolIntervalMs
     repeat: true
@@ -123,6 +175,7 @@ Item {
   // ---- window -----------------------------------------------------------------
   FloatingWindow {
     id: window
+    visible: false
 
     readonly property var focusedState: root.visionService ? root.visionService.stateFor(root.focusedId) : null
     title: "VisionHub" + (root.focusedId !== "" ? " — " + (focusedState && focusedState.name ? focusedState.name : root.focusedId) : "")
@@ -153,33 +206,45 @@ Item {
       }
 
       Keys.onEscapePressed: {
-        if (root.focusedId !== "") root.showGrid()
+        if (root.viewMode !== "grid") root.showGrid()
         else root.requestClose()
       }
 
       Keys.onLeftPressed: {
-        if (root.focusedId !== "") root.showPrevCamera()
+        if (root.viewMode !== "grid") root.showPrevCamera()
       }
 
       Keys.onRightPressed: {
-        if (root.focusedId !== "") root.showNextCamera()
+        if (root.viewMode !== "grid") root.showNextCamera()
       }
 
       Keys.onSpacePressed: {
-        if (root.focusedId !== "") root.patrolMode = !root.patrolMode
+        if (root.viewMode !== "grid") root.patrolMode = !root.patrolMode
       }
 
-      Keys.onDigit1Pressed: if (root.cameraList.length >= 1) root.showFocused(root.cameraList[0])
-      Keys.onDigit2Pressed: if (root.cameraList.length >= 2) root.showFocused(root.cameraList[1])
-      Keys.onDigit3Pressed: if (root.cameraList.length >= 3) root.showFocused(root.cameraList[2])
-      Keys.onDigit4Pressed: if (root.cameraList.length >= 4) root.showFocused(root.cameraList[3])
-      Keys.onDigit5Pressed: if (root.cameraList.length >= 5) root.showFocused(root.cameraList[4])
+      Keys.onDigit1Pressed: if (root.cameraList.length >= 1) (root.viewMode === "hero" ? root.showHero(root.cameraList[0]) : root.showCinema(root.cameraList[0]))
+      Keys.onDigit2Pressed: if (root.cameraList.length >= 2) (root.viewMode === "hero" ? root.showHero(root.cameraList[1]) : root.showCinema(root.cameraList[1]))
+      Keys.onDigit3Pressed: if (root.cameraList.length >= 3) (root.viewMode === "hero" ? root.showHero(root.cameraList[2]) : root.showCinema(root.cameraList[2]))
+      Keys.onDigit4Pressed: if (root.cameraList.length >= 4) (root.viewMode === "hero" ? root.showHero(root.cameraList[3]) : root.showCinema(root.cameraList[3]))
+      Keys.onDigit5Pressed: if (root.cameraList.length >= 5) (root.viewMode === "hero" ? root.showHero(root.cameraList[4]) : root.showCinema(root.cameraList[4]))
 
       Keys.onPressed: function(event) {
         if ((event.key === Qt.Key_M || event.text === "m" || event.text === "M") && root.focusedId !== "") {
           if (root.visionService && typeof root.visionService.toggleAudio === "function") {
             root.visionService.toggleAudio(root.focusedId)
           }
+          event.accepted = true
+        } else if (event.key === Qt.Key_S || event.text === "s" || event.text === "S") {
+          root.takeSnapshot(root.focusedId)
+          event.accepted = true
+        } else if (event.key === Qt.Key_A || event.text === "a" || event.text === "A") {
+          root.toggleAspect()
+          event.accepted = true
+        } else if (event.key === Qt.Key_G || event.text === "g" || event.text === "G") {
+          root.showGrid()
+          event.accepted = true
+        } else if (event.key === Qt.Key_H || event.text === "h" || event.text === "H") {
+          root.showHero()
           event.accepted = true
         }
       }
@@ -191,6 +256,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         focusedId: root.focusedId
+        viewMode: root.viewMode
         onlineCount: root.onlineCount
         totalCount: root.totalCount
         columns: root.columns
@@ -202,11 +268,8 @@ Item {
         fpsDropdownOpen: root.fpsDropdownOpen
 
         onShowGrid: root.showGrid()
-        onShowCinema: {
-          if (root.focusedId === "" && root.cameraList.length > 0) {
-            root.showFocused(root.cameraList[0])
-          }
-        }
+        onShowHero: root.showHero()
+        onShowCinema: root.showCinema()
         onSelectColumns: (cols) => root.columns = cols
         onSelectFps: (fps) => {
           root.streamFps = fps
@@ -231,19 +294,46 @@ Item {
 
         // Cinema Focused Single-Camera Live View
         Loader {
+          id: cinemaLoader
           anchors.fill: parent
-          active: root.focusedId !== ""
+          active: root.viewMode === "cinema" && root.focusedId !== ""
           sourceComponent: Component {
             CinemaView {
               focusedId: root.focusedId
               streamFps: root.streamFps
+              fillMode: root.fillMode
               isAudioOn: root.isAudioOn
               cameraList: root.cameraList
               totalCount: root.totalCount
               visionService: root.visionService
               onPrevCamera: root.showPrevCamera()
               onNextCamera: root.showNextCamera()
-              onSelectCamera: (camId) => root.showFocused(camId)
+              onSelectCamera: (camId) => root.showCinema(camId)
+              onTakeSnapshot: (snapCamId) => root.takeSnapshot(snapCamId)
+              onToggleAspect: root.toggleAspect()
+            }
+          }
+        }
+
+        // Hero 4+1 Multi-Camera Live View
+        Loader {
+          id: heroLoader
+          anchors.fill: parent
+          active: root.viewMode === "hero" && root.focusedId !== ""
+          sourceComponent: Component {
+            HeroView {
+              focusedId: root.focusedId
+              streamFps: root.streamFps
+              fillMode: root.fillMode
+              isAudioOn: root.isAudioOn
+              cameraList: root.cameraList
+              totalCount: root.totalCount
+              visionService: root.visionService
+              onPrevCamera: root.showPrevCamera()
+              onNextCamera: root.showNextCamera()
+              onSelectCamera: (camId) => root.showHero(camId)
+              onTakeSnapshot: (snapCamId) => root.takeSnapshot(snapCamId)
+              onToggleAspect: root.toggleAspect()
             }
           }
         }
@@ -252,17 +342,18 @@ Item {
         CameraGridView {
           anchors.fill: parent
           anchors.margins: Style.space(14)
-          visible: root.focusedId === "" && root.totalCount > 0
+          visible: root.viewMode === "grid" && root.totalCount > 0
           cameraList: root.cameraList
           columns: root.columns
           visionService: root.visionService
-          onSelectCamera: (camId) => root.showFocused(camId)
+          onSelectCamera: (camId) => root.showCinema(camId)
+          onTakeSnapshot: (camId) => root.takeSnapshot(camId)
         }
 
         // Empty state
         EmptyState {
           anchors.centerIn: parent
-          visible: root.focusedId === "" && (root.visionService === null || root.totalCount === 0)
+          visible: (root.viewMode === "grid" || root.focusedId === "") && (root.visionService === null || root.totalCount === 0)
           visionService: root.visionService
         }
       }

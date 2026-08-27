@@ -23,7 +23,6 @@ RSpec.describe VisionHub::Supervisor do
   let(:probe_results) { Hash.new(:online) }
   let(:probe_runner) { ->(camera) { probe_results[camera.id] } }
 
-  # Fake pump registry keyed by [camera_id, role].
   let(:pumps_by_id_role) { {} }
   let(:build_pump) do
     lambda do |kwargs|
@@ -33,241 +32,299 @@ RSpec.describe VisionHub::Supervisor do
     end
   end
 
-  # Drops everything queued so far; assertions only see fresh traffic.
-  def flush!
-    supervisor.drain_outbox
-  end
-
-  def event_kinds
-    supervisor.drain_outbox.map { |e| e[:event] }
-  end
-
-  def state_event(camera_id)
-    supervisor.drain_outbox.rfind { |e| e[:event] == :camera_state && e[:id] == camera_id }
-  end
-
   describe "#start" do
-    it "starts sub-stream pumps for every camera and says hello first" do
-      supervisor.start(now: 0)
+    subject(:start) { supervisor.start(now: 0) }
 
-      expect(pumps_by_id_role[["front", :sub]].running?).to be(true)
-      expect(pumps_by_id_role[["garage", :sub]].running?).to be(true)
-      expect(pumps_by_id_role[["front", :main]]).to be_nil
-      kinds = event_kinds
-      expect(kinds.first).to eq(:hello)
-      expect(kinds.count(:camera_state)).to eq(2)
+    context "with configured cameras" do
+      it "starts sub-stream pumps for every camera and publishes initial state" do
+        start
+
+        expect(pumps_by_id_role[["front", :sub]].running?).to be(true)
+        expect(pumps_by_id_role[["garage", :sub]].running?).to be(true)
+        expect(pumps_by_id_role[["front", :main]]).to be_nil
+
+        events = supervisor.drain_outbox
+        expect(events.first[:event]).to eq(:hello)
+        expect(events.count { |e| e[:event] == :camera_state }).to eq(2)
+      end
     end
 
-    it "starts grid streams when window opens and stops them when window closes" do
-      supervisor.start(now: 0)
-      flush!
+    context "with unconfigured cameras" do
+      let(:supervisor) do
+        described_class.new(
+          cameras: [cameras[0]], runtime_dir: "/run/vision-hub", secrets: Fakes::Secrets.new,
+          fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
+          build_pump: ->(kw) { Fakes::Pump.new(kw).tap { |p| p.start_mode = :unconfigured } },
+          probe_runner:
+        )
+      end
 
-      supervisor.handle({ "cmd" => "window", "open" => true }, now: 1)
-      expect(pumps_by_id_role[["front", :sub]].running?).to be(true)
-      expect(pumps_by_id_role[["garage", :sub]].running?).to be(true)
+      it "reports unconfigured error through the state stream" do
+        start
+        supervisor.handle({ "cmd" => "window", "open" => true }, now: 0)
 
-      supervisor.handle({ "cmd" => "window", "open" => false }, now: 2)
-      expect(pumps_by_id_role[["front", :sub]].running?).to be(false)
-      expect(pumps_by_id_role[["garage", :sub]].running?).to be(false)
-    end
-
-    it "reports unconfigured cameras through the state stream" do
-      bare = described_class.new(
-        cameras: [cameras[0]], runtime_dir: "/run/vision-hub", secrets: Fakes::Secrets.new,
-        fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
-        build_pump: ->(kw) { Fakes::Pump.new(kw).tap { |p| p.start_mode = :unconfigured } },
-        probe_runner:
-      )
-      bare.start(now: 0)
-      bare.handle({ "cmd" => "window", "open" => true }, now: 0)
-
-      expect(bare.drain_outbox).to include(
-        hash_including(event: :camera_state, id: "front", error: "credentials not found in keyring")
-      )
+        expect(supervisor.drain_outbox).to include(
+          hash_including(event: :camera_state, id: "front", error: "credentials not found in keyring")
+        )
+      end
     end
   end
 
   describe "#tick" do
     before do
       supervisor.start(now: 0)
-      flush!
+      supervisor.drain_outbox
     end
 
-    it "advances every pump with the injected time" do
-      supervisor.tick(now: 1)
+    context "when advancing time" do
+      it "advances every pump with the injected time" do
+        supervisor.tick(now: 1)
 
-      expect(pumps_by_id_role[["front", :sub]].events).to include([:tick, 1])
-      expect(pumps_by_id_role[["garage", :sub]].events).to include([:tick, 1])
+        expect(pumps_by_id_role[["front", :sub]].events).to include([:tick, 1])
+        expect(pumps_by_id_role[["garage", :sub]].events).to include([:tick, 1])
+      end
     end
 
-    it "probes one camera per tick round-robin and publishes transitions once" do
-      probe_results["front"] = :offline
-      supervisor.tick(now: 11) # first round-robin slot
+    context "when probing cameras round-robin" do
+      it "probes one camera per tick and publishes transitions once" do
+        probe_results["front"] = :offline
+        supervisor.tick(now: 11)
 
-      expect(state_event("front")).to include(online: false)
+        front_event = supervisor.drain_outbox.rfind { |e| e[:event] == :camera_state && e[:id] == "front" }
+        expect(front_event).to include(online: false)
 
-      supervisor.tick(now: 21) # garage's turn: its own first verdict
-      expect(state_event("garage")).to include(online: true)
+        supervisor.tick(now: 21)
+        garage_event = supervisor.drain_outbox.rfind { |e| e[:event] == :camera_state && e[:id] == "garage" }
+        expect(garage_event).to include(online: true)
 
-      supervisor.tick(now: 31) # front revisited, unchanged → silence
-      expect(event_kinds).to eq([])
+        supervisor.tick(now: 31)
+        expect(supervisor.drain_outbox).to be_empty
+      end
     end
 
-    it "propagates pump crashes into streaming=false plus the error text" do
-      pumps_by_id_role[["front", :sub]].fail_later("ffmpeg exited with code 255: Connection refused")
-      supervisor.tick(now: 2)
+    context "when a pump crashes" do
+      it "propagates pump crashes into streaming=false plus error detail" do
+        pumps_by_id_role[["front", :sub]].fail_later("ffmpeg exited with code 255: Connection refused")
+        supervisor.tick(now: 2)
 
-      expect(state_event("front")).to include(
-        online: true, streaming: false,
-        error: "ffmpeg exited with code 255: Connection refused"
-      )
+        front_event = supervisor.drain_outbox.rfind { |e| e[:event] == :camera_state && e[:id] == "front" }
+        expect(front_event).to include(
+          online: true, streaming: false,
+          error: "ffmpeg exited with code 255: Connection refused"
+        )
+      end
     end
 
-    it "stays quiet when nothing changes" do
-      supervisor.tick(now: 3) # front probed: nil → true
-      supervisor.tick(now: 13) # garage probed: nil → true
-      flush!
+    context "when state has not changed" do
+      it "emits no events" do
+        supervisor.tick(now: 3)
+        supervisor.tick(now: 13)
+        supervisor.drain_outbox
 
-      supervisor.tick(now: 23)
-      supervisor.tick(now: 33)
+        supervisor.tick(now: 23)
+        supervisor.tick(now: 33)
 
+        expect(supervisor.drain_outbox).to be_empty
+      end
+    end
+  end
+
+  describe "#handle" do
+    subject(:handle) { supervisor.handle(command, now:) }
+
+    let(:now) { 1 }
+    let(:command) { { "cmd" => "window", "open" => true } }
+
+    before do
+      supervisor.start(now: 0)
+      supervisor.drain_outbox
+    end
+
+    context "with window command" do
+      it "starts grid streams when window opens and stops them when window closes" do
+        handle
+        expect(pumps_by_id_role[["front", :sub]].running?).to be(true)
+        expect(pumps_by_id_role[["garage", :sub]].running?).to be(true)
+
+        supervisor.handle({ "cmd" => "window", "open" => false }, now: 2)
+        expect(pumps_by_id_role[["front", :sub]].running?).to be(false)
+        expect(pumps_by_id_role[["garage", :sub]].running?).to be(false)
+      end
+    end
+
+    context "with focus command" do
+      let(:command) { { "cmd" => "focus", "camera" => "front" } }
+      let(:now) { 10 }
+
+      it "starts the main pump for the focused camera only" do
+        handle
+
+        expect(pumps_by_id_role[["front", :main]].running?).to be(true)
+        expect(pumps_by_id_role[["garage", :main]]).to be_nil
+        expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(15)
+      end
+
+      context "when switching focus to another camera" do
+        it "stops the previous focus stream and starts the new one" do
+          handle
+          supervisor.handle({ "cmd" => "focus", "camera" => "garage" }, now: 11)
+
+          expect(pumps_by_id_role[["front", :main]].running?).to be(false)
+          expect(pumps_by_id_role[["garage", :main]].running?).to be(true)
+        end
+      end
+
+      context "when specifying a custom fps" do
+        let(:command) { { "cmd" => "focus", "camera" => "front", "fps" => 25 } }
+
+        it "uses the specified fps for the main pump" do
+          handle
+
+          expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(25)
+        end
+      end
+
+      context "when camera is unknown" do
+        let(:command) { { "cmd" => "focus", "camera" => "nope" } }
+
+        it "emits an error event" do
+          handle
+
+          expect(supervisor.drain_outbox.last).to include(
+            event: :error, message: 'focus: unknown camera "nope"'
+          )
+        end
+      end
+    end
+
+    context "with unfocus command" do
+      let(:command) { { "cmd" => "unfocus" } }
+      let(:now) { 12 }
+
+      it "stops the main pump and resumes sub streams when window is open" do
+        supervisor.handle({ "cmd" => "window", "open" => true }, now: 0)
+        supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
+        handle
+
+        expect(pumps_by_id_role[["front", :main]].running?).to be(false)
+        expect(pumps_by_id_role[["front", :sub]].running?).to be(true)
+      end
+    end
+
+    context "with set_fps command" do
+      let(:command) { { "cmd" => "set_fps", "fps" => 30 } }
+      let(:now) { 12 }
+
+      it "updates running stream dynamically" do
+        supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
+        expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(15)
+
+        handle
+        expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(30)
+      end
+    end
+
+    context "with ping command" do
+      let(:command) { { "cmd" => "ping", "echo" => 42 } }
+
+      it "responds with pong and echoes payload" do
+        handle
+
+        expect(supervisor.drain_outbox.last).to include(event: :pong, echo: 42)
+      end
+    end
+
+    context "with refresh command" do
+      let(:command) { { "cmd" => "refresh" } }
+      let(:now) { 0.5 }
+
+      it "probes every camera immediately" do
+        probe_results["garage"] = :offline
+        handle
+
+        garage_event = supervisor.drain_outbox.rfind { |e| e[:event] == :camera_state && e[:id] == "garage" }
+        expect(garage_event).to include(online: false)
+      end
+    end
+
+    context "with next and prev commands" do
+      it "cycles through cameras in order" do
+        supervisor.handle({ "cmd" => "next" }, now: 1)
+        expect(pumps_by_id_role[["front", :main]].running?).to be(true)
+
+        supervisor.handle({ "cmd" => "next" }, now: 2)
+        expect(pumps_by_id_role[["garage", :main]].running?).to be(true)
+
+        supervisor.handle({ "cmd" => "prev" }, now: 3)
+        expect(pumps_by_id_role[["front", :main]].running?).to be(true)
+      end
+    end
+
+    context "with an unknown command" do
+      let(:command) { { "cmd" => "explode" } }
+
+      it "emits an error event" do
+        handle
+
+        expect(supervisor.drain_outbox.last).to include(event: :error, message: include("explode"))
+      end
+    end
+
+    context "when publishing state updates" do
+      it "emits summary and frame_url" do
+        probe_results["front"] = :online
+        probe_results["garage"] = :online
+        supervisor.tick(now: 11)
+        supervisor.tick(now: 21)
+
+        events = supervisor.drain_outbox
+        summary = events.rfind { |e| e[:event] == :summary }
+        expect(summary).to include(
+          total: 2, online: 2, offline: 0,
+          all_healthy: true, any_offline: false
+        )
+        expect(summary[:tooltip]).to include("front", "garage", "Left-click: open grid")
+
+        camera_event = events.find { |e| e[:event] == :camera_state }
+        expect(camera_event).to include(frame_url: include("file:///run/vision-hub/"))
+      end
+    end
+  end
+
+  describe "#drain_outbox" do
+    subject(:drained) { supervisor.drain_outbox }
+
+    before { supervisor.start(now: 0) }
+
+    it "returns queued events and clears the outbox" do
+      expect(drained).not_to be_empty
       expect(supervisor.drain_outbox).to be_empty
     end
   end
 
-  describe "focus handling" do
-    before do
-      supervisor.start(now: 0)
-      flush!
-    end
-
-    it "starts the main pump for the focused camera only" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
-
-      expect(pumps_by_id_role[["front", :main]].running?).to be(true)
-      expect(pumps_by_id_role[["garage", :main]]).to be_nil
-    end
-
-    it "stops the previous focus when switching" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
-      supervisor.handle({ "cmd" => "focus", "camera" => "garage" }, now: 11)
-
-      expect(pumps_by_id_role[["front", :main]].running?).to be(false)
-      expect(pumps_by_id_role[["garage", :main]].running?).to be(true)
-    end
-
-    it "unfocus stops the main pump and resumes sub streams when window is open" do
-      supervisor.handle({ "cmd" => "window", "open" => true }, now: 0)
-      supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
-      supervisor.handle({ "cmd" => "unfocus" }, now: 12)
-
-      expect(pumps_by_id_role[["front", :main]].running?).to be(false)
-      expect(pumps_by_id_role[["front", :sub]].running?).to be(true)
-    end
-
-    it "rejects unknown cameras with an error event" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "nope" }, now: 10)
-
-      expect(supervisor.drain_outbox.last).to include(
-        event: :error, message: 'focus: unknown camera "nope"'
-      )
-    end
-
-    it "uses the higher fps for main-role pumps" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
-
-      expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(15)
-    end
-
-    it "accepts custom fps in focus command" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "front", "fps" => 25 }, now: 10)
-
-      expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(25)
-    end
-
-    it "updates running stream dynamically on set_fps" do
-      supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 10)
-      expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(15)
-
-      supervisor.handle({ "cmd" => "set_fps", "fps" => 30 }, now: 12)
-      expect(pumps_by_id_role[["front", :main]].kwargs[:fps]).to eq(30)
-    end
-  end
-
   describe "#shutdown" do
+    subject(:shutdown) { supervisor.shutdown(now: 100) }
+
     before do
       supervisor.start(now: 0)
-      flush!
+      supervisor.drain_outbox
       supervisor.handle({ "cmd" => "focus", "camera" => "front" }, now: 5)
     end
 
-    it "TERMs every pump including the focused main stream" do
-      supervisor.shutdown(now: 100)
+    it "stops every pump including the focused main stream" do
+      shutdown
 
       expect(pumps_by_id_role[["front", :sub]].running?).to be(false)
       expect(pumps_by_id_role[["front", :main]].running?).to be(false)
       expect(pumps_by_id_role[["garage", :sub]].running?).to be(false)
     end
 
-    it "tolerates being called twice" do
-      supervisor.shutdown(now: 100)
+    context "when called repeatedly" do
+      it "tolerates subsequent calls without error" do
+        shutdown
 
-      expect { supervisor.shutdown(now: 101) }.not_to raise_error
-    end
-  end
-
-  describe "IPC commands" do
-    before do
-      supervisor.start(now: 0)
-      flush!
-    end
-
-    it "answers ping with pong and echoes the payload" do
-      supervisor.handle({ "cmd" => "ping", "echo" => 42 }, now: 1)
-
-      expect(supervisor.drain_outbox.last).to include(event: :pong, echo: 42)
-    end
-
-    it "refresh probes every camera immediately" do
-      probe_results["garage"] = :offline
-      supervisor.handle({ "cmd" => "refresh" }, now: 0.5)
-
-      expect(state_event("garage")).to include(online: false)
-    end
-
-    it "flags unknown commands" do
-      supervisor.handle({ "cmd" => "explode" }, now: 1)
-
-      expect(supervisor.drain_outbox.last).to include(event: :error, message: include("explode"))
-    end
-
-    it "cycles to next and previous cameras in order" do
-      supervisor.handle({ "cmd" => "next" }, now: 1)
-      expect(pumps_by_id_role[["front", :main]].running?).to be(true)
-
-      supervisor.handle({ "cmd" => "next" }, now: 2)
-      expect(pumps_by_id_role[["garage", :main]].running?).to be(true)
-
-      supervisor.handle({ "cmd" => "prev" }, now: 3)
-      expect(pumps_by_id_role[["front", :main]].running?).to be(true)
-    end
-
-    it "emits summary and frame_url on state publication" do
-      probe_results["front"] = :online
-      probe_results["garage"] = :online
-      supervisor.tick(now: 11)
-      supervisor.tick(now: 21)
-
-      events = supervisor.drain_outbox
-      summary = events.rfind { |e| e[:event] == :summary }
-      expect(summary).to include(
-        total: 2, online: 2, offline: 0,
-        all_healthy: true, any_offline: false
-      )
-      expect(summary[:tooltip]).to include("front", "garage", "Left-click: open grid")
-
-      camera_event = events.find { |e| e[:event] == :camera_state }
-      expect(camera_event).to include(frame_url: include("file:///run/vision-hub/"))
+        expect { supervisor.shutdown(now: 101) }.not_to raise_error
+      end
     end
   end
 end

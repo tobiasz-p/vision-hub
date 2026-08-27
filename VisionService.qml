@@ -59,11 +59,33 @@ Item {
   property string daemonError: ""
   property string configError: ""
   property int restartAttempts: 0
+  property string snapshotDir: "Pictures/VisionHub"
 
   signal statesChanged()
+  signal snapshotTaken(string cameraId, string path)
 
   function frameUrl(cameraId) {
     return "file://" + runtimeDir + "/" + cameraId + ".jpg"
+  }
+
+  function takeSnapshot(cameraId) {
+    if (!cameraId) return ""
+    var src = runtimeDir + "/" + cameraId + ".jpg"
+    var d = new Date()
+    var pad = function(n) { return n < 10 ? "0" + n : "" + n }
+    var ts = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "_" +
+             pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds())
+    var filename = "VisionHub_" + cameraId + "_" + ts + ".jpg"
+    var rawFolder = root.snapshotDir || "Pictures/VisionHub"
+    var folder = rawFolder.replace(/^~(?=$|\/)/, root.homeDir)
+    var destDir = folder.startsWith("/") ? folder : (root.homeDir !== "" ? root.homeDir + "/" + folder : "/tmp/" + folder)
+    var destPath = destDir + "/" + filename
+
+    var shCmd = "(mkdir -p '" + destDir + "' && cp '" + src + "' '" + destPath + "' && action=$(notify-send -a 'VisionHub' -i '" + destPath + "' -A 'default=Open' 'VisionHub Snapshot' 'Saved " + filename + "\\nto " + rawFolder + "' 2>/dev/null) && [ \"$action\" = \"default\" ] && xdg-open '" + destPath + "' 2>/dev/null) &"
+    snapshotProc.command = ["sh", "-c", shCmd]
+    snapshotProc.running = true
+    root.snapshotTaken(cameraId, destPath)
+    return destPath
   }
 
   function stateFor(cameraId) {
@@ -92,6 +114,9 @@ Item {
       var audio = parseBool(settings.audioEnabled, root.defaultAudio)
       root.defaultAudio = audio
       root.audioEnabled = audio
+    }
+    if (settings.snapshotDir !== undefined && typeof settings.snapshotDir === "string" && settings.snapshotDir.trim() !== "") {
+      root.snapshotDir = settings.snapshotDir.trim()
     }
   }
 
@@ -173,6 +198,10 @@ Item {
     startDaemon()
   }
   Component.onDestruction: stopDaemon()
+
+  Process {
+    id: snapshotProc
+  }
 
   // The daemon writes frames into $XDG_RUNTIME_DIR/vision-hub; create it
   // before first spawn so ffmpeg never races the directory into existence.

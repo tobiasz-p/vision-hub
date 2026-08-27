@@ -25,6 +25,11 @@ BarWidget {
   readonly property bool hwaccel: parseBool(setting("hwaccel", true), true)
   readonly property bool defaultAudio: parseBool(setting("audioEnabled", false), false)
   readonly property int gridColumns: clampInt(setting("gridColumns", 3), 1, 6)
+  readonly property string snapshotDir: setting("snapshotDir", "Pictures/VisionHub")
+  readonly property string defaultView: {
+    var v = String(setting("defaultView", "grid")).toLowerCase()
+    return (v === "hero" || v === "cinema") ? v : "grid"
+  }
 
   function clampInt(value, min, max) {
     var n = parseInt(value, 10)
@@ -41,7 +46,8 @@ BarWidget {
       subFps: root.subFps,
       mainFps: root.mainFps,
       hwaccel: root.hwaccel,
-      audioEnabled: root.defaultAudio
+      audioEnabled: root.defaultAudio,
+      snapshotDir: root.snapshotDir
     })
   }
 
@@ -52,6 +58,7 @@ BarWidget {
   onSubFpsChanged: root.pushSettings()
   onMainFpsChanged: root.pushSettings()
   onHwaccelChanged: root.pushSettings()
+  onSnapshotDirChanged: root.pushSettings()
 
   // ---- derived state -----------------------------------------------------------
   readonly property var states: visionService ? visionService.cameraStates : ({})
@@ -95,7 +102,10 @@ BarWidget {
         return
       }
       if (root.bar && root.bar.shell) {
-        root.bar.shell.toggle(Theme.pluginId, JSON.stringify({ columns: root.gridColumns }))
+        root.bar.shell.toggle(Theme.pluginId, JSON.stringify({
+          columns: root.gridColumns,
+          view: root.defaultView
+        }))
       }
     }
   }

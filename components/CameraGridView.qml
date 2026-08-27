@@ -12,6 +12,7 @@ GridView {
   property var visionService: null
 
   signal selectCamera(string cameraId)
+  signal takeSnapshot(string cameraId)
 
   clip: true
   cellWidth: Math.floor(width / Math.max(1, grid.columns))
@@ -35,6 +36,7 @@ GridView {
       state: grid.visionService ? grid.visionService.stateFor(delegateRoot.modelData) : null
 
       onTap: (tappedCameraId) => grid.selectCamera(tappedCameraId)
+      onTakeSnapshot: (snapCamId) => grid.takeSnapshot(snapCamId)
     }
   }
 }

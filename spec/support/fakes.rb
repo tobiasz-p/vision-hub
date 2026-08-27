@@ -88,4 +88,72 @@ module Fakes
   Status = Struct.new(:exitstatus) do
     def to_i = exitstatus
   end
+
+  # Test harness for simulating process spawn, waitpid, and signal delivery.
+  class ProcessHarness
+    attr_reader :spawned, :live, :signals, :exits
+    attr_accessor :spawn_stderr
+
+    def initialize
+      @spawned = []
+      @live = {}
+      @signals = []
+      @exits = {}
+      @pid_counter = 4000
+      @spawn_stderr = ""
+    end
+
+    def last_pid
+      @pid_counter
+    end
+
+    def spawner
+      lambda do |argv|
+        @pid_counter += 1
+        pid = @pid_counter
+        @spawned << argv.dup
+        @live[pid] = true
+        [pid, StringIO.new(@spawn_stderr.dup)]
+      end
+    end
+
+    def reaper
+      lambda do |pid, _flags|
+        return nil unless @exits.key?(pid)
+
+        code = @exits.delete(pid)
+        @live.delete(pid)
+        [pid, Status.new(code)]
+      end
+    end
+
+    def killer
+      lambda do |target, name|
+        @signals << [target, name]
+        @live.key?(target.abs)
+      end
+    end
+  end
+
+  # Fake socket that raises WAIT_WRITABLE for non-blocking timeout testing.
+  class NonWritableSocket
+    def initialize(*); end
+
+    def connect_nonblock(_address)
+      raise WAIT_WRITABLE
+    end
+
+    def close; end
+  end
+
+  # Fake socket that simulates EINPROGRESS handshake (refuses first, succeeds second).
+  class RetryingSocket < NonWritableSocket
+    def connect_nonblock(_address)
+      @tries ||= 0
+      @tries += 1
+      raise WAIT_WRITABLE if @tries == 1
+
+      :ok
+    end
+  end
 end

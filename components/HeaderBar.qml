@@ -8,6 +8,8 @@ Rectangle {
   id: headerBar
 
   property string focusedId: ""
+  property string viewMode: focusedId !== "" ? "cinema" : "grid"
+  property int fillMode: Image.PreserveAspectFit
   property int onlineCount: 0
   property int totalCount: 0
   property int columns: 3
@@ -19,6 +21,7 @@ Rectangle {
   property bool fpsDropdownOpen: false
 
   signal showGrid()
+  signal showHero()
   signal showCinema()
   signal selectColumns(int cols)
   signal selectFps(int fps)
@@ -70,8 +73,9 @@ Rectangle {
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.verticalCenter: parent.verticalCenter
     visible: headerBar.width > Theme.screens.sm
-    isCinema: headerBar.focusedId !== ""
+    viewMode: headerBar.viewMode
     onShowGrid: headerBar.showGrid()
+    onShowHero: headerBar.showHero()
     onShowCinema: headerBar.showCinema()
   }
 
@@ -84,15 +88,15 @@ Rectangle {
 
     // Grid Column Density Selector
     DensitySelector {
-      visible: headerBar.focusedId === "" && headerBar.totalCount > 1
+      visible: headerBar.viewMode === "grid" && headerBar.totalCount > 1
       anchors.verticalCenter: parent.verticalCenter
       columns: headerBar.columns
       onSelectColumns: (cols) => headerBar.selectColumns(cols)
     }
 
-    // Stream FPS Dropdown (in cinema view)
+    // Stream FPS Dropdown (in hero / cinema view)
     FpsDropdown {
-      visible: headerBar.focusedId !== ""
+      visible: headerBar.viewMode !== "grid" && headerBar.focusedId !== ""
       anchors.verticalCenter: parent.verticalCenter
       streamFps: headerBar.streamFps
       fpsOptions: headerBar.fpsOptions
@@ -102,10 +106,10 @@ Rectangle {
 
     // Audio Mute/Unmute Toggle
     PillButton {
-      visible: headerBar.focusedId !== ""
+      visible: headerBar.viewMode !== "grid" && headerBar.focusedId !== ""
       anchors.verticalCenter: parent.verticalCenter
       icon: headerBar.isAudioOn ? "󰕾" : "󰕿"
-      label: headerBar.isAudioOn ? "Audio ON" : "Muted"
+      label: headerBar.isAudioOn ? "Audio" : "Muted"
       active: headerBar.isAudioOn
       collapseOnNarrow: true
       parentWidth: headerBar.width
@@ -114,7 +118,7 @@ Rectangle {
 
     // Patrol Mode Toggle
     PillButton {
-      visible: headerBar.focusedId !== "" && headerBar.totalCount > 1
+      visible: headerBar.viewMode !== "grid" && headerBar.totalCount > 1
       anchors.verticalCenter: parent.verticalCenter
       icon: "󰑖"
       label: "Patrol"

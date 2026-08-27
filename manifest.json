@@ -31,7 +31,9 @@
       "hwaccel": true,
       "audioEnabled": false,
       "showOfflineCameras": true,
-      "probeIntervalSec": 10
+      "probeIntervalSec": 10,
+      "snapshotDir": "Pictures/VisionHub",
+      "defaultView": "grid"
     },
     "schema": [
       { "key": "gridColumns", "type": "integer", "label": "Grid columns", "min": 1, "max": 6, "step": 1, "defaultValue": 3 },
@@ -39,7 +41,9 @@
       { "key": "mainFps", "type": "integer", "label": "Mainstream fps (focused view)", "min": 1, "max": 30, "step": 1, "defaultValue": 15 },
       { "key": "hwaccel", "type": "boolean", "label": "Hardware decode (vaapi/auto)", "defaultValue": true },
       { "key": "audioEnabled", "type": "boolean", "label": "Play audio by default in cinema view", "defaultValue": false },
-      { "key": "showOfflineCameras", "type": "boolean", "label": "Show offline cameras in the grid", "defaultValue": true }
+      { "key": "showOfflineCameras", "type": "boolean", "label": "Show offline cameras in the grid", "defaultValue": true },
+      { "key": "snapshotDir", "type": "string", "label": "Snapshot folder (relative to ~ or absolute)", "defaultValue": "Pictures/VisionHub" },
+      { "key": "defaultView", "type": "string", "label": "Default view on open (grid, hero, cinema)", "defaultValue": "grid" }
     ]
   }
 }

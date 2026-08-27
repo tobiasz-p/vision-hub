@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
+# Core namespace for the VisionHub RTSP IP camera monitoring plugin daemon and background engine.
 module VisionHub
+  # Default application ID used as the keyring namespace attribute for secret lookup.
+  # @return [String]
   DEFAULT_APPLICATION_ID = "tobiasz-p.vision-hub"
 end
 

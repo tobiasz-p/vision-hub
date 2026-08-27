@@ -13,18 +13,71 @@ module VisionHub
   # documented exposure (see design §7). The :concat_file strategy hands
   # ffmpeg a mode-0600 playlist instead; whether it survives contact with real
   # cameras is exactly what the spike phase decides.
+  #
+  # @!attribute [r] camera
+  #   @return [Camera] associated camera configuration
+  # @!attribute [r] role
+  #   @return [Symbol] stream role (:sub or :main)
+  # @!attribute [r] fps
+  #   @return [Integer] target frame rate
+  # @!attribute [r] hwaccel
+  #   @return [Boolean] whether hardware acceleration is enabled
+  # @!attribute [r] input_strategy
+  #   @return [Symbol] input credential strategy (:argv or :concat_file)
+  # @!attribute [r] audio
+  #   @return [Boolean] whether audio decoding is enabled
+  # @!attribute [r] status
+  #   @return [Symbol] current lifecycle status (:idle, :running, :stopping, :stopped, :backoff, :unconfigured)
+  # @!attribute [r] last_error
+  #   @return [String, nil] last error description if crashed or failed
   class FramePump
+    # Valid pump roles (:sub for substream grid frames, :main for focused mainstream).
+    # @return [Array<Symbol>]
     ROLES = %i[sub main].freeze
+
+    # Initial retry backoff in seconds.
+    # @return [Float]
     BACKOFF_INITIAL = 1.0
+
+    # Maximum retry backoff in seconds.
+    # @return [Float]
     BACKOFF_MAX = 60.0
+
+    # Uptime in seconds after which crash attempts reset.
+    # @return [Float]
     STABLE_AFTER = 30.0
+
+    # Grace period in seconds before SIGTERM escalates to SIGKILL.
+    # @return [Float]
     STOP_GRACE = 2.0
+
+    # Grace period in seconds after SIGKILL before abandoning wait.
+    # @return [Float]
     KILL_GRACE = 1.0
+
+    # Delay in seconds between credential re-checks for unconfigured cameras.
+    # @return [Float]
     UNCONFIGURED_RETRY = 30.0
+
+    # RTSP socket timeout in microseconds.
+    # @return [Integer]
     RTSP_TIMEOUT_US = 8_000_000
 
     attr_reader :camera, :role, :fps, :hwaccel, :input_strategy, :audio, :status, :last_error
 
+    # Initializes a FramePump supervisor for one camera stream.
+    #
+    # @param camera [Camera] camera definition
+    # @param role [Symbol] stream role (:sub or :main)
+    # @param runtime_dir [String] tmpfs runtime directory
+    # @param fps [Integer] target frame rate
+    # @param hwaccel [Boolean] whether to enable hardware decoding
+    # @param audio [Boolean] whether to enable audio decoding (mainstream only)
+    # @param input_strategy [Symbol] credential strategy (:argv or :concat_file)
+    # @param secrets [SecretStore, nil] secret store for credential lookup
+    # @param logger [#info, #warn, #error, #debug, nil] optional logger
+    # @param process_io [Hash] injected process collaborators (:spawner, :reaper, :killer)
+    # @raise [ArgumentError] if role is invalid
     def initialize(camera:, role:, runtime_dir:, fps:, hwaccel:,
                    audio: false, input_strategy: :argv, secrets: nil, logger: nil, **process_io)
       raise ArgumentError, "unknown role #{role.inspect}" unless ROLES.include?(role)
@@ -45,18 +98,31 @@ module VisionHub
       @wanted = false
     end
 
+    # Checks whether the ffmpeg child process is actively running.
+    #
+    # @return [Boolean]
     def running?
       !@pid.nil? && status == :running
     end
 
+    # Checks whether this pump is marked as wanted.
+    #
+    # @return [Boolean]
     def wanted?
       @wanted
     end
 
+    # Returns the absolute path where the output JPEG frame is written.
+    #
+    # @return [String] file path in tmpfs
     def frame_path
       File.join(@runtime_dir, "#{camera.id}.jpg")
     end
 
+    # Registers an event listener block for lifecycle transitions.
+    #
+    # @yieldparam payload [Hash] event payload with :camera, :role, :event, and optional keys
+    # @return [self]
     def on_event(&block)
       @on_event = block
       self
@@ -64,6 +130,10 @@ module VisionHub
 
     # ---- control ----
 
+    # Marks the pump as wanted and spawns or schedules the ffmpeg child process.
+    #
+    # @param now [Float] current monotonic timestamp
+    # @return [void]
     def start(now: Clock.now)
       @wanted = true
       @last_error = nil
@@ -75,8 +145,14 @@ module VisionHub
       attempt_spawn(now)
     end
 
+    # Requests termination of the child process.
+    #
     # Marked unwanted; actual teardown happens across ticks so the event loop
-    # never blocks longer than one signal send. If immediate is true, signals
+    # never blocks longer than one signal send. If immediate is true, signals KILL.
+    #
+    # @param now [Float] current monotonic timestamp
+    # @param immediate [Boolean] whether to escalate directly to SIGKILL
+    # @return [void]
     def stop(now: Clock.now, immediate: false)
       @wanted = false
       @next_action_at = nil
@@ -93,6 +169,10 @@ module VisionHub
       end
     end
 
+    # Advances the pump's state machine, reaping dead processes and retrying backoffs.
+    #
+    # @param now [Float] current monotonic timestamp
+    # @return [void]
     def tick(now: Clock.now)
       reap_child(now) if @pid
       drain_stderr if @stderr_io
@@ -106,6 +186,10 @@ module VisionHub
 
     # ---- argv construction (exposed for specs and the spike) ----
 
+    # Builds the complete command-line argument list for ffmpeg.
+    #
+    # @param url [String] RTSP stream URL
+    # @return [Array<String>] argv array
     def build_argv(url)
       argv = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "warning"]
       argv += ["-fflags", "+genpts+discardcorrupt+nobuffer", "-flags", "low_delay"]
