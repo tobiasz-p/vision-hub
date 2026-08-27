@@ -41,6 +41,8 @@ Omarchy (Quickshell) plugin providing live RTSP IP camera monitoring via a top-b
 ## Workflow Conventions
 
 - Contributions follow Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `chore:`) and a strictly linear history (rebase, no merge commits).
+- Separate distinct fixes/features into separate commits (atomic commits).
+- Every commit must include a descriptive body explaining *why* the change was made (the rationale, problem solved, and design decisions).
 - Always verify all test suites and linter checks pass before committing:
   ```sh
   bundle exec rake && omarchy plugin validate ~/.config/omarchy/plugins/tobiasz-p.vision-hub
