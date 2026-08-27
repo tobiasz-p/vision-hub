@@ -8,6 +8,7 @@ Rectangle {
   id: tile
 
   signal tap(string cameraId)
+  signal takeSnapshot(string cameraId)
 
   property string cameraId: ""
   property int fps: 0
@@ -102,6 +103,65 @@ Rectangle {
         verticalAlignment: Text.AlignVCenter
       }
     }
+  }
+
+  // Quick Snapshot Button on Hover (Bottom-Right Floating Pill)
+  Rectangle {
+    id: tileSnapBtn
+    anchors.bottom: parent.bottom
+    anchors.right: parent.right
+    anchors.margins: 10
+    width: snapMouse.containsMouse ? tileSnapRow.implicitWidth + 18 : 32
+    height: 32
+    radius: 16
+    color: Color.popups.background
+    border.width: 1
+    border.color: snapMouse.containsMouse ? Color.accent : Color.popups.border
+    visible: tileMouse.containsMouse && tile.online && tileFrame.hasFrame
+    clip: true
+    z: 20
+
+    Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+
+    Row {
+      id: tileSnapRow
+      anchors.centerIn: parent
+      spacing: 6
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "󰄀"
+        font.pixelSize: 13
+        color: snapMouse.containsMouse ? Color.accent : Color.foreground
+      }
+
+      Text {
+        visible: snapMouse.containsMouse
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "Screenshot"
+        font.pixelSize: 11
+        font.bold: true
+        color: Color.foreground
+      }
+    }
+
+    MouseArea {
+      id: snapMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: {
+        tile.takeSnapshot(tile.cameraId)
+        tileShutter.trigger()
+      }
+    }
+  }
+
+  // Shutter Flash Feedback
+  ShutterFlash {
+    id: tileShutter
   }
 
   MouseArea {

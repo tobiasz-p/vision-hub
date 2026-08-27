@@ -17,4 +17,6 @@ StatusDot 1.0 StatusDot.qml
 StreamHudBadge 1.0 StreamHudBadge.qml
 TilePlaceholder 1.0 TilePlaceholder.qml
 TileStatusBadge 1.0 TileStatusBadge.qml
+HeroView 1.0 HeroView.qml
+ShutterFlash 1.0 ShutterFlash.qml
 ViewModeSwitcher 1.0 ViewModeSwitcher.qml

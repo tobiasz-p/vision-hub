@@ -29,7 +29,10 @@ High-framerate focused stream with interactive FPS switcher, live RTSP audio pla
 ## Features
 
 - **Top Bar Health Widget**: Compact status pill displaying active online camera count (e.g. `󰹗 4/4`), offline warnings, and hover tooltips with detailed status for each configured camera.
-- **Floating Live View Window**: Themed desktop window featuring a configurable multi-camera grid and high-framerate focused single-camera view.
+- **Floating Live View Window**: Themed desktop window featuring a configurable multi-camera grid, 4+1 Hero hybrid layout, and high-framerate focused Cinema view.
+- **4+1 Hero Hybrid Layout**: Primary high-framerate stream accompanied by an interactive bottom live dock showing all cameras; click any camera thumbnail to promote it to Hero instantly.
+- **One-Click Instant Snapshot**: Capture full-resolution / live frames directly to `~/Pictures/VisionHub` with thumbnail-rich desktop notifications and shutter flash feedback.
+- **Aspect Ratio Fit & Fill (Crop)**: Toggle seamlessly between clean pillarbox/letterbox aspect fit and full-bleed crop modes.
 - **Resource Efficient & Isolated**: RTSP streams decode in crash-isolated background `ffmpeg` worker processes managed by an asynchronous Ruby daemon. Only visible cameras consume streaming resources.
 - **tmpfs Fast Frame Buffer**: Video frames stream directly into RAM (`$XDG_RUNTIME_DIR/vision-hub`), protecting SSD longevity and ensuring zero latency UI rendering.
 - **Hardware Acceleration Support**: Automatic hardware-accelerated video decoding (VAAPI / CUDA / Vulkan / QSV).
@@ -136,26 +139,34 @@ Settings can be customized via `omarchy bar set`:
 | `audioEnabled` | `false` | Play audio by default in cinema view |
 | `hwaccel` | `true` | Enable hardware-accelerated video decoding |
 | `showOfflineCameras` | `true` | Show offline/unreachable cameras in the grid view |
+| `snapshotDir` | `Pictures/VisionHub` | Destination directory for snapshots (`~` or absolute) |
+| `defaultView` | `grid` | Default view mode on open (`grid`, `hero`, `cinema`) |
 
 Example:
 ```bash
-omarchy bar set tobiasz-p.vision-hub gridColumns 2
-omarchy bar set tobiasz-p.vision-hub targetFps 10
+omarchy bar set tobiasz-p.vision-hub defaultView hero
+omarchy bar set tobiasz-p.vision-hub snapshotDir "Pictures/Surveillance"
 ```
 
 ---
 
-## Gestures & Controls
+## Gestures & Keyboard Shortcuts
 
-| Action | Control |
+| Action | Shortcut / Control |
 |---|---|
-| **Left Click (Bar Widget)** | Toggle live-view floating window |
-| **Right Click (Bar Widget)** | Force immediate network health re-probe |
-| **Click (Camera Tile)** | Switch to focused single-camera view (high-fps main stream) |
-| **Press `←` / `→` Arrow (Cinema View)** | Cycle to previous / next camera |
-| **Press `1`-`9` (Cinema View)** | Switch directly to camera by position |
-| **Click `← Grid` or Press `Esc` (Focused View)** | Return to multi-camera grid |
-| **Press `Esc` (Grid View)** | Close live-view window |
+| **Toggle Window** | Left-click on Bar Widget |
+| **Re-probe Cameras** | Right-click on Bar Widget |
+| **Switch to Grid View** | Click `Grid` tab or press <kbd>G</kbd> |
+| **Switch to Hero 4+1 View** | Click `Hero` tab or press <kbd>H</kbd> |
+| **Switch to Cinema View** | Click `Cinema` tab or press <kbd>C</kbd> |
+| **Focus Camera** | Click any Camera Tile in Grid or Thumbnail in Dock |
+| **Cycle Cameras** | Press <kbd>←</kbd> / <kbd>→</kbd> Arrow keys |
+| **Direct Camera Jump** | Press <kbd>1</kbd>–<kbd>9</kbd> |
+| **Toggle Auto-Patrol** | Press <kbd>Space</kbd> or click `Patrol` pill |
+| **Capture Snapshot** | Press <kbd>S</kbd> or click `󰄀 Snapshot` (saves to `~/Pictures/VisionHub`) |
+| **Toggle Aspect Fit / Fill** | Press <kbd>A</kbd> or click `󰹑 Fit` / `󰹍 Fill` |
+| **Toggle Audio** | Press <kbd>M</kbd> or click `Audio` pill |
+| **Exit Mode / Close** | Press <kbd>Esc</kbd> or <kbd>Ctrl</kbd>+<kbd>W</kbd> |
 
 ---
 
