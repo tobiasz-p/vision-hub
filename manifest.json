@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tobiasz-p.vision-hub",
   "name": "VisionHub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "tobiasz-p",
   "license": "MIT",
   "description": "Live view of RTSP IP cameras — health at a glance in the bar, real window with a camera grid and focused view.",
