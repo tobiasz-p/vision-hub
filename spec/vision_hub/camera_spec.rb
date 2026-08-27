@@ -50,7 +50,12 @@ RSpec.describe VisionHub::Camera do
       ["oversize port", { "id" => "f", "host" => "h", "port" => 65_536 }, /port must be an integer/],
       ["relative mainPath", { "id" => "f", "host" => "h", "mainPath" => "stream1" },
        /mainPath must be a string beginning/],
-      ["null subPath", { "id" => "f", "host" => "h", "subPath" => nil }, /subPath must be a string beginning/]
+      ["null subPath", { "id" => "f", "host" => "h", "subPath" => nil }, /subPath must be a string beginning/],
+      ["oversized id", { "id" => "a" * 65, "host" => "h" }, /id exceeds maximum length/],
+      ["oversized name", { "id" => "f", "host" => "h", "name" => "a" * 129 }, /name exceeds maximum length/],
+      ["oversized host", { "id" => "f", "host" => "a" * 256 }, /host exceeds maximum length/],
+      ["oversized path", { "id" => "f", "host" => "h", "mainPath" => "/#{"a" * 513}" },
+       /mainPath exceeds maximum length/]
     ].each do |label, entry, expected|
       it "rejects #{label}" do
         expect { described_class.from_hash(entry, 0) }.to raise_error(VisionHub::ConfigError, expected)

@@ -38,6 +38,8 @@ Item {
     anchors.fill: parent
     cache: false
     asynchronous: true
+    sourceSize.width: 1920
+    sourceSize.height: 1080
     fillMode: frame.fillMode
     visible: status === Image.Ready
     onStatusChanged: {
@@ -54,6 +56,8 @@ Item {
     anchors.fill: parent
     cache: false
     asynchronous: true
+    sourceSize.width: 1920
+    sourceSize.height: 1080
     fillMode: frame.fillMode
     visible: status === Image.Ready
     onStatusChanged: {

@@ -13,6 +13,11 @@ module VisionHub
     DEFAULT_MAIN_PATH = "/stream1"
     DEFAULT_SUB_PATH = "/stream2"
     ID_PATTERN = /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
+    MAX_ID_LENGTH = 64
+    MAX_NAME_LENGTH = 128
+    MAX_HOST_LENGTH = 255
+    MAX_USERNAME_LENGTH = 128
+    MAX_PATH_LENGTH = 512
 
     attr_reader :index, :id, :name, :host, :port, :username, :main_path, :sub_path, :enabled
 
@@ -21,7 +26,7 @@ module VisionHub
 
       raise ConfigError, "#{where}: expected an object" unless raw.is_a?(Hash)
 
-      id = require_string(raw, "id", where)
+      id = require_string(raw, "id", where, max_length: MAX_ID_LENGTH)
       unless id.match?(ID_PATTERN)
         raise ConfigError, "#{where}.id: #{id.inspect} may only contain letters, digits, dots, dashes, underscores"
       end
@@ -29,28 +34,34 @@ module VisionHub
       new(
         index:,
         id:,
-        name: optional_string(raw, "name", where) || id,
-        host: require_string(raw, "host", where),
+        name: optional_string(raw, "name", where, max_length: MAX_NAME_LENGTH) || id,
+        host: require_string(raw, "host", where, max_length: MAX_HOST_LENGTH),
         port: parse_port(raw, where),
-        username: optional_string(raw, "username", where),
+        username: optional_string(raw, "username", where, max_length: MAX_USERNAME_LENGTH),
         main_path: parse_path(raw, "mainPath", DEFAULT_MAIN_PATH, where),
         sub_path: parse_path(raw, "subPath", DEFAULT_SUB_PATH, where),
         enabled: raw.key?("enabled") ? raw.fetch("enabled") != false : true
       )
     end
 
-    def self.require_string(raw, key, where)
+    def self.require_string(raw, key, where, max_length: nil)
       value = raw[key]
       raise ConfigError, "#{where}.#{key} is required" if value.nil? || (value.respond_to?(:empty?) && value.empty?)
       raise ConfigError, "#{where}.#{key} must be a string" unless value.is_a?(String)
+      if max_length && value.length > max_length
+        raise ConfigError, "#{where}.#{key} exceeds maximum length of #{max_length}"
+      end
 
       value
     end
 
-    def self.optional_string(raw, key, where)
+    def self.optional_string(raw, key, where, max_length: nil)
       value = raw[key]
       return nil if value.nil?
       raise ConfigError, "#{where}.#{key} must be a string" unless value.is_a?(String)
+      if max_length && value.length > max_length
+        raise ConfigError, "#{where}.#{key} exceeds maximum length of #{max_length}"
+      end
 
       value.empty? ? nil : value
     end
@@ -68,6 +79,9 @@ module VisionHub
       value = raw.fetch(key, fallback)
       unless value.is_a?(String) && value.start_with?("/")
         raise ConfigError, "#{where}.#{key} must be a string beginning with /"
+      end
+      if value.length > MAX_PATH_LENGTH
+        raise ConfigError, "#{where}.#{key} exceeds maximum length of #{MAX_PATH_LENGTH}"
       end
 
       value

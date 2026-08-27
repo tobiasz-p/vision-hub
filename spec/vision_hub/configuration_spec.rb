@@ -46,6 +46,13 @@ RSpec.describe VisionHub::Configuration do
 
       expect(config.error).to include('duplicate id "front" (also at index 0)')
     end
+
+    it "rejects camera counts exceeding MAX_CAMERAS" do
+      cams = (1..(described_class::MAX_CAMERAS + 1)).map { |i| { "id" => "cam#{i}", "host" => "10.0.0.#{i}" } }
+      config = described_class.parse({ "cameras" => cams }.to_json)
+
+      expect(config.error).to include("exceeds maximum limit of #{described_class::MAX_CAMERAS}")
+    end
   end
 
   describe ".load" do
@@ -69,14 +76,14 @@ RSpec.describe VisionHub::Configuration do
     end
 
     it "caps absurdly large files" do
-      allow(File).to receive(:read).and_call_original
-      allow(File).to receive(:read)
-        .with("/huge.json", mode: "rb", encoding: "UTF-8")
-        .and_return("x" * (described_class::MAX_BYTES + 1))
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "huge.json")
+        File.binwrite(path, "x" * (described_class::MAX_BYTES + 10))
 
-      config = described_class.load("/huge.json")
+        config = described_class.load(path)
 
-      expect(config.error).to include("exceeds")
+        expect(config.error).to include("exceeds")
+      end
     end
   end
 

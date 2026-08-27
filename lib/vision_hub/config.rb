@@ -8,6 +8,7 @@ module VisionHub
   # #error so the daemon can ship a config_error event instead of crashing.
   class Configuration
     MAX_BYTES = 256 * 1024
+    MAX_CAMERAS = 32
 
     attr_reader :cameras, :error
 
@@ -15,13 +16,17 @@ module VisionHub
       text = read_text(path)
       return text if text.is_a?(Configuration)
 
-      return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if text.bytesize > MAX_BYTES
-
       parse(text)
     end
 
     def self.read_text(path)
-      File.read(path, mode: "rb", encoding: "UTF-8")
+      stat = File.stat(path)
+      return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if stat.size > MAX_BYTES
+
+      text = File.open(path, "rb:UTF-8") { |f| f.read(MAX_BYTES + 1) }
+      return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if text.nil? || text.bytesize > MAX_BYTES
+
+      text
     rescue StandardError => e
       new([], error: "#{path}: #{e.class}: #{e.message}")
     end
@@ -30,9 +35,7 @@ module VisionHub
       cameras = []
       begin
         raw = JSON.parse(text)
-        unless raw.is_a?(Hash) && raw["cameras"].is_a?(Array)
-          raise ConfigError, 'top level must be an object with a "cameras" array'
-        end
+        validate_raw!(raw)
 
         cameras = raw["cameras"].each_with_index.map { |entry, index| Camera.from_hash(entry, index) }
         assert_unique_ids(cameras)
@@ -43,6 +46,16 @@ module VisionHub
       end
 
       new(cameras)
+    end
+
+    def self.validate_raw!(raw)
+      unless raw.is_a?(Hash) && raw["cameras"].is_a?(Array)
+        raise ConfigError, 'top level must be an object with a "cameras" array'
+      end
+
+      return unless raw["cameras"].size > MAX_CAMERAS
+
+      raise ConfigError, "cameras array exceeds maximum limit of #{MAX_CAMERAS} cameras"
     end
 
     def self.assert_unique_ids(cameras)
