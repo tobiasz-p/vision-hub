@@ -42,6 +42,8 @@ parser.parse(ARGV)
 abort("missing --config") unless options[:config]
 abort("missing --runtime-dir") unless options[:runtime_dir]
 
+VisionHub::RuntimeDirectory.ensure_secure_dir!(options[:runtime_dir])
+
 # A broken or missing cameras.json is a setup state, not a crash: the daemon
 # stays alive, reports the problem once, and answers commands so the UI can
 # show instructions. The user fixes the file and hits refresh (or the widget
@@ -116,4 +118,5 @@ ensure
     supervisor&.tick(now: VisionHub::Clock.now)
     sleep 0.1
   end
+  VisionHub::RuntimeDirectory.cleanup_dir!(options[:runtime_dir])
 end

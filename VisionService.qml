@@ -28,8 +28,15 @@ Item {
   }
 
   readonly property string daemonScript: resolveLocalPath("daemon.rb")
-  readonly property string runtimeBase: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
-  readonly property string runtimeDir: runtimeBase + "/vision-hub"
+  readonly property string runtimeBase: {
+    var xdg = Quickshell.env("XDG_RUNTIME_DIR")
+    if (xdg && xdg !== "") return xdg
+    var user = Quickshell.env("USER") || "user"
+    return "/tmp/vision-hub-" + user
+  }
+  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR")
+    ? Quickshell.env("XDG_RUNTIME_DIR") + "/vision-hub"
+    : runtimeBase
 
   // ---- daemon knobs (pushed by the bar widget's settings) --------------------
   property int subFps: 5
@@ -171,7 +178,7 @@ Item {
   // before first spawn so ffmpeg never races the directory into existence.
   Process {
     id: ensureRuntimeDir
-    command: ["mkdir", "-p", root.runtimeDir]
+    command: ["mkdir", "-p", "-m", "0700", root.runtimeDir]
   }
 
   Process {
