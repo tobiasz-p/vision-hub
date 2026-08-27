@@ -31,6 +31,7 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: (hud.title !== "" ? hud.title.toUpperCase() : "STREAM") + " · LIVE RTSP"
       font.pixelSize: 11
       font.bold: true
@@ -48,6 +49,7 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: hud.streamFps + " FPS HW"
       font.pixelSize: 10
       font.bold: true
@@ -66,6 +68,7 @@ Rectangle {
     Text {
       visible: hud.isAudioOn
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: "󰕾 AUDIO"
       font.pixelSize: 10
       font.bold: true

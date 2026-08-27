@@ -36,6 +36,7 @@ Rectangle {
     Text {
       visible: btn.icon !== ""
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: btn.icon
       font.pixelSize: 13
       color: btn.active ? btn.activeColor : Color.muted
@@ -45,6 +46,7 @@ Rectangle {
     Text {
       visible: btn.showLabel && btn.label !== ""
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: btn.label
       font.pixelSize: 11
       font.bold: btn.active

@@ -38,6 +38,7 @@ Rectangle {
         spacing: 6
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: "󰕰"
           font.pixelSize: 12
           color: !switcher.isCinema ? Color.accent : Color.muted
@@ -45,6 +46,7 @@ Rectangle {
         }
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: "Grid"
           font.pixelSize: 11
           font.bold: !switcher.isCinema
@@ -76,6 +78,7 @@ Rectangle {
         spacing: 6
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: "󰍉"
           font.pixelSize: 12
           color: switcher.isCinema ? Color.accent : Color.muted
@@ -83,6 +86,7 @@ Rectangle {
         }
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: "Cinema"
           font.pixelSize: 11
           font.bold: switcher.isCinema

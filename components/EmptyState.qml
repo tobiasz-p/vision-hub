@@ -22,6 +22,7 @@ Column {
 
     Text {
       anchors.centerIn: parent
+      textFormat: Text.PlainText
       text: "󰹗"
       font.pixelSize: 32
       color: Color.accent
@@ -30,6 +31,7 @@ Column {
 
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
+    textFormat: Text.PlainText
     text: {
       if (emptyState.visionService && emptyState.visionService.configError !== "") {
         return emptyState.visionService.configError
@@ -46,6 +48,7 @@ Column {
 
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
+    textFormat: Text.PlainText
     text: "Create ~/.config/vision-hub/cameras.json and store credentials in gnome-keyring"
     color: Color.muted
     font.pixelSize: 13

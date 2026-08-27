@@ -20,6 +20,7 @@ Rectangle {
 
   Text {
     anchors.centerIn: parent
+    textFormat: Text.PlainText
     text: navBtn.icon
     font.pixelSize: 24
     color: navHover.containsMouse ? Color.accent : Color.foreground

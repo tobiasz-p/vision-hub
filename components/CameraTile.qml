@@ -85,6 +85,7 @@ Rectangle {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: "󰍉"
         font.pixelSize: 14
         color: Color.accent
@@ -93,6 +94,7 @@ Rectangle {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: "Open Live Stream"
         font.pixelSize: 12
         font.bold: true

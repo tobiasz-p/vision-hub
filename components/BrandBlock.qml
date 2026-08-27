@@ -25,6 +25,7 @@ Row {
 
     Text {
       anchors.centerIn: parent
+      textFormat: Text.PlainText
       text: "󰹗"
       font.pixelSize: 18
       color: Color.accent
@@ -38,6 +39,7 @@ Row {
     Row {
       spacing: 4
       Text {
+        textFormat: Text.PlainText
         text: "VISION"
         font.pixelSize: 14
         font.bold: true
@@ -45,6 +47,7 @@ Row {
         color: Color.foreground
       }
       Text {
+        textFormat: Text.PlainText
         text: "HUB"
         font.pixelSize: 14
         font.bold: true
@@ -54,6 +57,7 @@ Row {
     }
 
     Text {
+      textFormat: Text.PlainText
       text: brand.focusedId !== "" ? "STREAM · " + (brand.focusedState && brand.focusedState.name ? brand.focusedState.name.toUpperCase() : brand.focusedId.toUpperCase()) : brand.onlineCount + "/" + brand.totalCount + " CAMERAS ONLINE"
       font.pixelSize: 10
       font.bold: true

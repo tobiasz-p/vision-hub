@@ -37,6 +37,7 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: {
         if (capsule.focusedId !== "") return "LIVE " + capsule.streamFps + " FPS"
         return capsule.onlineCount === capsule.totalCount ? "ALL HEALTHY" : (capsule.totalCount - capsule.onlineCount) + " OFFLINE"

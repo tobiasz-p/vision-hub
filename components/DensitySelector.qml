@@ -33,6 +33,7 @@ Rectangle {
 
         Text {
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: parent.modelData + "×"
           font.pixelSize: 10
           font.bold: density.columns === parent.modelData

@@ -23,6 +23,7 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: "󰹗"
       font.pixelSize: 12
       color: Color.accent
@@ -31,6 +32,7 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: badge.name.toUpperCase()
       color: Color.foreground
       font.pixelSize: 11

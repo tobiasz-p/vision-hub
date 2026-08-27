@@ -53,6 +53,7 @@ Rectangle {
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: capsuleRow.itemState && capsuleRow.itemState.name ? capsuleRow.itemState.name : cameraThumbItem.modelData.toUpperCase()
             font.pixelSize: 11
             font.bold: true

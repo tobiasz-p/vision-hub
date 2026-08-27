@@ -25,6 +25,7 @@ Column {
 
     Text {
       anchors.centerIn: parent
+      textFormat: Text.PlainText
       text: placeholder.errorText !== "" ? "󰅚" : (!placeholder.online ? "󰅚" : "󰑐")
       font.pixelSize: 20
       color: !placeholder.online ? Color.urgent : Color.muted
@@ -33,6 +34,7 @@ Column {
 
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
+    textFormat: Text.PlainText
     text: placeholder.cameraId.toUpperCase()
     font.pixelSize: 13
     font.bold: true
@@ -43,6 +45,7 @@ Column {
   Text {
     anchors.horizontalCenter: parent.horizontalCenter
     width: placeholder.width
+    textFormat: Text.PlainText
     wrapMode: Text.Wrap
     horizontalAlignment: Text.AlignHCenter
     maximumLineCount: 2

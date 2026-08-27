@@ -33,6 +33,7 @@ Item {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: "󰑖"
         font.pixelSize: 12
         color: Color.accent
@@ -41,6 +42,7 @@ Item {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.streamFps + " FPS"
         font.pixelSize: 11
         font.bold: true
@@ -50,6 +52,7 @@ Item {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.isOpen ? "▴" : "▾"
         font.pixelSize: 10
         color: Color.muted
@@ -102,6 +105,7 @@ Item {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: fpsOptionItem.modelData + " FPS"
               font.pixelSize: 11
               font.bold: fpsOptionItem.isSelected
@@ -112,6 +116,7 @@ Item {
             Text {
               visible: fpsOptionItem.isSelected
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: "✓"
               font.pixelSize: 10
               font.bold: true

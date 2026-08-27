@@ -30,6 +30,7 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: tag.label
       font.pixelSize: 10
       font.bold: true
