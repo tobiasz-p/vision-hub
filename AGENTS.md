@@ -38,6 +38,22 @@ Omarchy (Quickshell) plugin providing live RTSP IP camera monitoring via a top-b
 - **Fail loudly at boundaries, degrade gracefully in UI**: Surface errors with actionable diagnostic text in the UI rather than failing silently or hanging.
 - **Never log a secret**: Passwords must never appear in logs, debug statements, exception messages, or `inspect` strings.
 
+## Testing Guidelines & Spec Conventions
+
+- **100% Public API Coverage**: Every public class method (`.method`) and instance method (`#method`) across all domain classes must have dedicated test coverage. Do not test private methods directly.
+- **Strict Describe/Context Hierarchy**:
+  - Top-level `RSpec.describe ClassName`.
+  - Nested `describe ".class_method"` or `describe "#instance_method"` for each method under test.
+  - Nested `context "when <condition>"` or `context "with <scenario>"` for branches and state variations.
+  - Never describe context conditions inside `it` strings (e.g. avoid `it "does y when X"` — write `context "when X" do it "does y"`).
+- **Named Subjects**:
+  - Define a named subject inside each method `describe` block that represents the method or operation under test (e.g. `subject(:url) { camera.url_for(...) }`, `subject(:camera) { described_class.from_hash(...) }`).
+  - Do not execute subjects inside `before` hooks; invoke/evaluate the subject inside the `it` example block.
+  - Methods called iteratively with varying arguments across a single example (such as `#tick(now:)`) may be called directly in the example.
+- **No `def` in Spec Files**: Do not define Ruby helper methods inside spec files. Use `let`, `let!`, `before`, shared contexts, or separate reusable fakes in `spec/support/fakes.rb`.
+- **Custom Matchers**: Implement reusable custom matchers in dedicated files under `spec/support/matchers/` (e.g. `spec/support/matchers/have_file_mode.rb`).
+- **Isolation via Stubs and Injected Collaborators**: Use constructor-injected fakes and test doubles for external I/O (processes, sockets, keyrings, clocks). Unit tests must run offline, deterministically, and without side effects.
+
 ## Workflow Conventions
 
 - Contributions follow Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `chore:`) and a strictly linear history (rebase, no merge commits).
