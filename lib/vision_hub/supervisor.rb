@@ -14,8 +14,22 @@ module VisionHub
   # staggering keeps any single tick's stall bounded while ffmpeg children —
   # which own the actual video path — keep running unaffected.
   class Supervisor
+    # Default probe interval in seconds per camera.
+    # @return [Float]
     DEFAULT_PROBE_INTERVAL = 10.0
 
+    # Initializes the Supervisor orchestrator.
+    #
+    # @param cameras [Array<Camera>] list of active camera definitions
+    # @param runtime_dir [String] tmpfs runtime directory path
+    # @param secrets [SecretStore] secret store for password lookup
+    # @param fps [Integer] substream target frame rate
+    # @param main_fps [Integer] mainstream target frame rate
+    # @param hwaccel [Boolean] whether hardware acceleration is enabled
+    # @param input_strategy [Symbol] credential strategy (:argv or :concat_file)
+    # @param probe_interval [Float] probe interval in seconds per camera
+    # @param logger [#info, #warn, #error, #debug, nil] optional logger
+    # @param collaborators [Hash] injected seams (:build_pump, :probe_runner)
     def initialize(cameras:, runtime_dir:, secrets:,
                    fps:, main_fps:, hwaccel:, input_strategy: :argv,
                    probe_interval: DEFAULT_PROBE_INTERVAL, logger: nil, **collaborators)
@@ -32,6 +46,10 @@ module VisionHub
       init_internal_state
     end
 
+    # Starts all substream frame pumps and emits initial hello event.
+    #
+    # @param now [Float] current monotonic timestamp
+    # @return [void]
     def start(now:)
       @now = now
       @probe_due = Hash.new(0.0)
@@ -44,6 +62,8 @@ module VisionHub
       publish_changes
     end
 
+    # Mapping of IPC command names to handler method names.
+    # @return [Hash{String => Symbol}]
     COMMAND_HANDLERS = {
       "ping" => :handle_ping,
       "refresh" => :handle_refresh,
@@ -59,6 +79,11 @@ module VisionHub
 
     # ---- IPC commands ----
 
+    # Dispatches an incoming IPC command message to its handler method.
+    #
+    # @param message [Hash] parsed JSON command payload
+    # @param now [Float] current monotonic timestamp
+    # @return [void]
     def handle(message, now:)
       @now = now
       cmd = message["cmd"]
@@ -68,17 +93,71 @@ module VisionHub
       emit(:error, message: "unknown command #{cmd.inspect}")
     end
 
+    # Handles the 'ping' IPC command by echoing back a pong event.
+    #
+    # @param message [Hash] ping command message with optional "echo" field
+    # @return [void]
     def handle_ping(message) = emit(:pong, echo: message["echo"])
+
+    # Handles the 'refresh' IPC command by immediately re-probing all cameras.
+    #
+    # @param _msg [Hash] command payload
+    # @return [void]
     def handle_refresh(_msg) = refresh_all
+
+    # Handles the 'focus' IPC command to focus a single camera in mainstream mode.
+    #
+    # @param message [Hash] focus command payload containing "camera", optional "fps", optional "audio"
+    # @return [void]
     def handle_focus(message) = focus(message["camera"], fps: message["fps"]&.to_i, audio: message["audio"])
+
+    # Handles the 'unfocus' IPC command to return to substream grid mode.
+    #
+    # @param _msg [Hash] command payload
+    # @return [void]
     def handle_unfocus(_msg) = unfocus
+
+    # Handles the 'next' IPC command to focus the next camera in sequence.
+    #
+    # @param _msg [Hash] command payload
+    # @return [void]
     def handle_next(_msg) = cycle_camera(:next)
+
+    # Handles the 'prev' IPC command to focus the previous camera in sequence.
+    #
+    # @param _msg [Hash] command payload
+    # @return [void]
     def handle_prev(_msg) = cycle_camera(:prev)
+
+    # Handles the 'cycle' IPC command to cycle camera focus forwards or backwards.
+    #
+    # @param message [Hash] cycle command payload containing "direction" ("next" or "prev")
+    # @return [void]
     def handle_cycle(message) = cycle_camera(message["direction"] == "prev" ? :prev : :next)
+
+    # Handles the 'set_fps' IPC command to adjust the mainstream target FPS.
+    #
+    # @param message [Hash] command payload containing "fps"
+    # @return [void]
     def handle_fps(message) = change_fps(message["fps"])
+
+    # Handles the 'audio' IPC command to enable or disable mainstream audio.
+    #
+    # @param message [Hash] command payload containing "camera" and "enabled"
+    # @return [void]
     def handle_audio(message) = toggle_audio(message["camera"], message["enabled"] == true)
+
+    # Handles the 'window' IPC command reflecting open/closed state of the QML window.
+    #
+    # @param message [Hash] command payload containing "open"
+    # @return [void]
     def handle_window(message) = update_window_state(message["open"] == true)
 
+    # Executes a supervisor tick: performs scheduled round-robin reachability probes,
+    # advances pump state machines, and publishes state delta events.
+    #
+    # @param now [Float] current monotonic timestamp
+    # @return [void]
     def tick(now:)
       return unless ready?
 
@@ -88,6 +167,9 @@ module VisionHub
       publish_changes
     end
 
+    # Drains and returns all queued IPC outbound events.
+    #
+    # @return [Array<Hash>] list of event payloads
     def drain_outbox
       events = @outbox.dup
       @outbox.clear
@@ -97,6 +179,9 @@ module VisionHub
     # Best-effort teardown when the daemon exits: every pump gets TERM now;
     # the caller escalates via further ticks or relies on PDEATHSIG if this
     # process is killed outright.
+    #
+    # @param now [Float] current monotonic timestamp
+    # @return [void]
     def shutdown(now:)
       return unless @pumps
 

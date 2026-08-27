@@ -12,16 +12,31 @@ module VisionHub
   class Ipc
     # A single JSON line above this size is treated as hostile: dropped, with
     # everything up to its newline discarded.
+    # @return [Integer]
     MAX_LINE_BYTES = 64 * 1024
 
+    # Serializes a payload hash into a newline-terminated JSON string.
+    #
+    # @param payload [Hash] payload to serialize
+    # @return [String] newline-terminated JSON string
     def self.encode(payload)
       "#{JSON.generate(payload)}\n"
     end
 
     # Incremental JSON-lines parser with size bounds checking.
     class Reader
+      # Result of feeding input to the incremental reader.
+      # @!attribute [rw] kind
+      #   @return [Symbol] result status kind (:message, :oversize, or :invalid)
+      # @!attribute [rw] message
+      #   @return [Hash, nil] parsed JSON payload if kind is :message
+      # @!attribute [rw] detail
+      #   @return [String, nil] error details if kind is :oversize or :invalid
       Result = Struct.new(:kind, :message, :detail, keyword_init: true)
 
+      # Initializes an incremental JSON-lines reader.
+      #
+      # @param max_line_bytes [Integer] maximum allowable byte length for a single line
       def initialize(max_line_bytes: MAX_LINE_BYTES)
         @max_line_bytes = max_line_bytes
         @buffer = +""
@@ -33,6 +48,9 @@ module VisionHub
       #   :oversize  - a line exceeded MAX_LINE_BYTES and was dropped
       #   :invalid   - non-empty line that was not a JSON object
       # Empty lines are skipped silently.
+      #
+      # @param chunk [String] raw byte chunk from input stream
+      # @return [Array<Result>] parsed stream results
       def feed(chunk)
         @buffer << chunk
         results = []

@@ -12,6 +12,9 @@ module VisionHub
     # child also puts itself into its own process group, letting callers
     # signal the whole tree. Platforms without fork fall back to
     # Process.spawn's pgroup option (losing PDEATHSIG, keeping pgroup).
+    #
+    # @param argv [Array<String>] command line arguments to execute
+    # @return [Array(Integer, IO)] child PID and readable pipe IO for stderr
     def self.spawn(argv)
       rd, wr = IO.pipe
       parent_pid = Process.pid
@@ -31,6 +34,11 @@ module VisionHub
       [pid, rd]
     end
 
+    # Non-blocking or flagged process wait.
+    #
+    # @param pid [Integer] child process ID
+    # @param flags [Integer] waitpid flags (defaults to Process::WNOHANG)
+    # @return [Array(Integer, Process::Status), Array(Integer, nil), nil] waitpid result
     def self.reap(pid, flags = Process::WNOHANG)
       Process.waitpid2(pid, flags)
     rescue Errno::ECHILD
@@ -39,6 +47,10 @@ module VisionHub
 
     # Signals the process group first, falling back to the bare pid. Returns
     # whether the signal was delivered anywhere.
+    #
+    # @param pid [Integer] process ID
+    # @param name [String, Integer, Symbol] signal name or number
+    # @return [Boolean] true if signal was successfully delivered
     def self.kill(pid, name)
       delivered = begin
         Process.kill(name, -pid)
@@ -56,6 +68,10 @@ module VisionHub
       end
     end
 
+    # Prepares child process environment prior to exec (PDEATHSIG and process group).
+    #
+    # @param parent_pid [Integer] PID of the parent process
+    # @return [void]
     def self.prepare_child(parent_pid)
       require "fiddle"
       libc = Fiddle.dlopen(nil)

@@ -7,16 +7,29 @@ module VisionHub
   # port. Purely transport-level — an online camera may still fail auth or
   # stream negotiation, which the frame pump reports separately.
   class HealthProbe
+    # Default probe connect timeout in seconds.
+    # @return [Float]
     DEFAULT_TIMEOUT = 2.0
 
+    # Initializes a HealthProbe instance.
+    #
+    # @param timeout [Float] connection timeout in seconds
+    # @param socket_class [Class] socket factory class (defaults to Socket)
+    # @param select_fn [#call] callable wrapping select (defaults to IO.method(:select))
     def initialize(timeout: DEFAULT_TIMEOUT, socket_class: Socket, select_fn: IO.method(:select))
       @timeout = timeout
       @socket_class = socket_class
       @select_fn = select_fn
     end
 
+    # Checks TCP reachability for the given host and port.
+    #
     # Returns :online or :offline. Never raises; every failure mode maps to
     # :offline so the event loop cannot be killed by a hostile address.
+    #
+    # @param host [String] target hostname or IP address
+    # @param port [Integer] target TCP port number
+    # @return [Symbol] :online if reachable, :offline otherwise
     def probe(host, port)
       address = Addrinfo.tcp(host, port)
       socket = @socket_class.new(address.afamily, :STREAM, 0)
