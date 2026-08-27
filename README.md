@@ -96,10 +96,23 @@ Create `~/.config/vision-hub/cameras.json`:
 
 ### 2. Store Credentials in Keyring
 
-Store the RTSP password for each camera using `secret-tool`:
+Camera passwords are stored securely in GNOME Keyring using `secret-tool`.
+
+#### Option A: Single shared password for all cameras
+If all cameras share the same password, store a single default entry:
+
+```bash
+secret-tool store --label='VisionHub default camera' application tobiasz-p.vision-hub camera default
+```
+
+#### Option B: Per-camera passwords
+Store specific passwords for individual cameras by matching the `id` defined in `cameras.json` (takes precedence over the default):
 
 ```bash
 secret-tool store --label='VisionHub camera front' application tobiasz-p.vision-hub camera front
+```
+
+```bash
 secret-tool store --label='VisionHub camera backyard' application tobiasz-p.vision-hub camera backyard
 ```
 
