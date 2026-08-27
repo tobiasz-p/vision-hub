@@ -112,10 +112,11 @@ module VisionHub
       argv += ["-hwaccel", "auto"] if hwaccel
       argv += input_argv(url)
       if role == :sub
-        argv + ["-an", "-sn", "-dn", "-vf", "scale=640:-1", "-frames:v", "1",
-                "-q:v", "6", "-atomic_writing", "1", "-y", frame_path]
+        argv + ["-an", "-sn", "-dn", "-vf", "scale=w=640:h=480:force_original_aspect_ratio=decrease",
+                "-frames:v", "1", "-q:v", "6", "-atomic_writing", "1", "-y", frame_path]
       else
-        video_out = ["-map", "0:v:0", "-an", "-sn", "-dn", "-vf", "fps=#{fps},scale=1920:-1",
+        video_out = ["-map", "0:v:0", "-an", "-sn", "-dn",
+                     "-vf", "fps=#{fps},scale=w=1920:h=1080:force_original_aspect_ratio=decrease",
                      "-q:v", "4", "-atomic_writing", "1", "-update", "1", "-y", frame_path]
         if audio
           audio_out = ["-map", "0:a:0?", "-vn", "-sn", "-dn",
@@ -136,12 +137,15 @@ module VisionHub
 
     def input_argv(url)
       case input_strategy
+      when :concat_file
+        write_playlist(url)
+        ["-rtsp_transport", "tcp", "-timeout", FramePump::RTSP_TIMEOUT_US.to_s,
+         "-probesize", "128000", "-analyzeduration", "200000",
+         "-protocol_whitelist", "file,crypto,data,compat,tcp,rtsp,udp",
+         "-f", "concat", "-safe", "0", "-i", playlist_path]
       when :argv
         ["-rtsp_transport", "tcp", "-timeout", FramePump::RTSP_TIMEOUT_US.to_s,
          "-probesize", "128000", "-analyzeduration", "200000", "-i", url]
-      when :concat_file
-        write_playlist(url)
-        ["-f", "concat", "-safe", "0", "-i", playlist_path]
       else
         raise ArgumentError, "unknown input strategy #{input_strategy.inspect}"
       end
@@ -253,7 +257,13 @@ module VisionHub
 
     def compose_error(exit_code, detail)
       prefix = "ffmpeg exited with code #{exit_code}"
-      detail ? "#{prefix}: #{detail}" : prefix
+      detail ? "#{prefix}: #{sanitize_secrets(detail)}" : prefix
+    end
+
+    def sanitize_secrets(text)
+      return nil unless text
+
+      text.gsub(%r{(://[^:]+:)([^@]+)(@)}, '\1***\3')
     end
 
     def schedule_retry(now)
@@ -286,8 +296,7 @@ module VisionHub
     def drop_stale_playlist
       return if input_strategy != :concat_file || running?
 
-      require "fileutils"
-      FileUtils.rm_f(playlist_path)
+      RuntimeDirectory.clean_file!(playlist_path)
     rescue StandardError => e
       log(:debug, "playlist cleanup failed: #{e.message}")
     end
@@ -340,6 +349,7 @@ module VisionHub
     end
 
     def write_playlist(url)
+      RuntimeDirectory.clean_file!(playlist_path)
       escaped = url.gsub("'", "''")
       content = "ffconcat version 1.0\nfile '#{escaped}'\n"
       File.open(playlist_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) { |f| f.write(content) }

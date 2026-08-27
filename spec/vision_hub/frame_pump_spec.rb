@@ -27,26 +27,8 @@ RSpec.describe VisionHub::FramePump do
   let(:pid_counter) { [4000] } # last issued pid
   let(:exits) { {} } # pid => exit code to report on next reap
   let(:signals) { [] } # [target, name]
-  let(:stderr_text) { "" }
-
-  let(:spawner) do
-    lambda do |argv|
-      pid_counter[0] += 1
-      pid = pid_counter[0]
-      spawned << argv.dup
-      live[pid] = true
-      [pid, StringIO.new(stderr_text.dup)]
-    end
-  end
-  let(:spawner_with_stderr) do
-    lambda do |argv|
-      pid_counter[0] += 1
-      pid = pid_counter[0]
-      spawned << argv.dup
-      live[pid] = true
-      [pid, StringIO.new("some earlier warning\nConnection refused\n")]
-    end
-  end
+  let(:spawner) { make_spawner }
+  let(:spawner_with_stderr) { make_spawner("some earlier warning\nConnection refused\n") }
   let(:reaper) do
     lambda do |pid, _flags|
       return nil unless exits.key?(pid)
@@ -60,6 +42,16 @@ RSpec.describe VisionHub::FramePump do
     lambda do |target, name|
       signals << [target, name]
       live.key?(target.abs)
+    end
+  end
+
+  def make_spawner(stderr = "")
+    lambda do |argv|
+      pid_counter[0] += 1
+      pid = pid_counter[0]
+      spawned << argv.dup
+      live[pid] = true
+      [pid, StringIO.new(stderr.dup)]
     end
   end
 
@@ -91,7 +83,7 @@ RSpec.describe VisionHub::FramePump do
 
       expect(argv).to end_with(File.join(runtime_dir, "front.jpg"))
       expect(argv).to include("-frames:v", "1", "-y", "-atomic_writing", "1")
-      expect(argv[argv.index("-vf") + 1]).to eq("scale=640:-1")
+      expect(argv[argv.index("-vf") + 1]).to eq("scale=w=640:h=480:force_original_aspect_ratio=decrease")
       expect(argv).to include("-hwaccel", "auto")
     end
 
@@ -101,7 +93,7 @@ RSpec.describe VisionHub::FramePump do
 
       expect(argv).to end_with(File.join(runtime_dir, "front.jpg"))
       expect(argv).to include("-update", "1", "-atomic_writing", "1", "-y")
-      expect(argv[argv.index("-vf") + 1]).to eq("fps=20,scale=1920:-1")
+      expect(argv[argv.index("-vf") + 1]).to eq("fps=20,scale=w=1920:h=1080:force_original_aspect_ratio=decrease")
       expect(argv).to include("-hwaccel", "auto")
     end
 
@@ -130,6 +122,7 @@ RSpec.describe VisionHub::FramePump do
         playlist = File.join(runtime_dir, "front.sub.ffconcat")
         expect(argv).to include(playlist)
         expect(argv.join(" ")).not_to include("s3cret")
+        expect(argv).to include("-protocol_whitelist")
         expect(format("%o", File.stat(playlist).mode)).to end_with("600")
         expect(File.read(playlist)).to include("file 'rtsp://admin:s3cret@10.0.0.5/stream2'")
       end
@@ -265,10 +258,12 @@ RSpec.describe VisionHub::FramePump do
       expect(backoff_due_at(501)).to eq(1.0)
     end
 
-    it "surfaces the newest stderr line as error detail" do
+    it "surfaces the newest stderr line as error detail and sanitizes embedded passwords" do
+      err_msg = "Error opening 'rtsp://admin:supersecret@10.0.0.5/stream2': Connection refused\n"
+      spawner_with_secret = make_spawner(err_msg)
       pump_with_stderr = described_class.new(
         camera:, role: :sub, runtime_dir:, fps: 5, hwaccel: true,
-        input_strategy: :argv, secrets:, spawner: spawner_with_stderr,
+        input_strategy: :argv, secrets:, spawner: spawner_with_secret,
         reaper:, killer:
       )
 
@@ -277,7 +272,16 @@ RSpec.describe VisionHub::FramePump do
       pump_with_stderr.tick(now: 101.5)
 
       expect(pump_with_stderr.last_error).to include("ffmpeg exited with code 1")
-      expect(pump_with_stderr.last_error).to include("Connection refused")
+      expect(pump_with_stderr.last_error).to include("rtsp://admin:***@10.0.0.5/stream2")
+      expect(pump_with_stderr.last_error).not_to include("supersecret")
+    end
+
+    it "defaults to argv input strategy" do
+      default_pump = described_class.new(
+        camera:, role: :sub, runtime_dir:, fps: 5, hwaccel: true,
+        secrets:, spawner:, reaper:, killer:
+      )
+      expect(default_pump.input_strategy).to eq(:argv)
     end
 
     it "emits exited events tagged with camera and role" do

@@ -17,7 +17,7 @@ module VisionHub
     DEFAULT_PROBE_INTERVAL = 10.0
 
     def initialize(cameras:, runtime_dir:, secrets:,
-                   fps:, main_fps:, hwaccel:, input_strategy:,
+                   fps:, main_fps:, hwaccel:, input_strategy: :argv,
                    probe_interval: DEFAULT_PROBE_INTERVAL, logger: nil, **collaborators)
       @cameras = cameras
       @runtime_dir = runtime_dir
