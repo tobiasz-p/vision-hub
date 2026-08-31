@@ -85,6 +85,29 @@ RSpec.describe VisionHub::Configuration do
         expect(config.error).to include("exceeds")
       end
     end
+
+    it "rejects symlinks" do
+      Dir.mktmpdir do |dir|
+        real_file = File.join(dir, "real.json")
+        link_file = File.join(dir, "link.json")
+        File.write(real_file, '{ "cameras": [{ "id": "front", "host": "10.0.0.5" }] }')
+        File.symlink(real_file, link_file)
+
+        config = described_class.load(link_file)
+
+        expect(config).not_to be_ok
+        expect(config.error).to match(/Errno::ELOOP|Too many levels of symbolic links/i)
+      end
+    end
+
+    it "rejects non-regular files such as directories" do
+      Dir.mktmpdir do |dir|
+        config = described_class.load(dir)
+
+        expect(config).not_to be_ok
+        expect(config.error).to include("not a regular file")
+      end
+    end
   end
 
   describe "#camera_by_id" do

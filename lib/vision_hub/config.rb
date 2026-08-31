@@ -20,13 +20,18 @@ module VisionHub
     end
 
     def self.read_text(path)
-      stat = File.stat(path)
-      return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if stat.size > MAX_BYTES
+      flags = File::RDONLY | File::NOFOLLOW | File::NONBLOCK
+      File.open(path, flags) do |f|
+        stat = f.stat
+        return new([], error: "#{path}: not a regular file") unless stat.file?
+        return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if stat.size > MAX_BYTES
 
-      text = File.open(path, "rb:UTF-8") { |f| f.read(MAX_BYTES + 1) }
-      return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if text.nil? || text.bytesize > MAX_BYTES
+        text = f.read(MAX_BYTES + 1)
+        text = text ? text.force_encoding(Encoding::UTF_8) : +""
+        return new([], error: "#{path}: file exceeds #{MAX_BYTES} bytes") if text.bytesize > MAX_BYTES
 
-      text
+        text
+      end
     rescue StandardError => e
       new([], error: "#{path}: #{e.class}: #{e.message}")
     end
