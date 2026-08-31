@@ -8,11 +8,10 @@ module VisionHub
   # from its event loop and passes the time in, which keeps the whole state
   # machine deterministic and testable with fake processes.
   #
-  # Credential handling: the RTSP URL is assembled in memory only. With the
-  # default :argv strategy ffmpeg receives it on its command line — a known,
-  # documented exposure (see design §7). The :concat_file strategy hands
-  # ffmpeg a mode-0600 playlist instead; whether it survives contact with real
-  # cameras is exactly what the spike phase decides.
+  # Credential handling: the RTSP URL is assembled in memory only. Under the
+  # default :concat_file strategy, ffmpeg receives a mode-0600 ffconcat playlist
+  # in the secure tmpfs runtime directory, keeping credentials out of argv and
+  # /proc/<pid>/cmdline. The legacy :argv strategy passes the URL directly.
   class FramePump
     ROLES = %i[sub main].freeze
     BACKOFF_INITIAL = 1.0
@@ -26,7 +25,7 @@ module VisionHub
     attr_reader :camera, :role, :fps, :hwaccel, :input_strategy, :audio, :status, :last_error
 
     def initialize(camera:, role:, runtime_dir:, fps:, hwaccel:,
-                   audio: false, input_strategy: :argv, secrets: nil, logger: nil, **process_io)
+                   audio: false, input_strategy: :concat_file, secrets: nil, logger: nil, **process_io)
       raise ArgumentError, "unknown role #{role.inspect}" unless ROLES.include?(role)
 
       @camera = camera
@@ -112,11 +111,13 @@ module VisionHub
       argv += ["-hwaccel", "auto"] if hwaccel
       argv += input_argv(url)
       if role == :sub
-        argv + ["-an", "-sn", "-dn", "-vf", "scale=w=640:h=480:force_original_aspect_ratio=decrease",
-                "-frames:v", "1", "-q:v", "6", "-atomic_writing", "1", "-y", frame_path]
+        video_out = ["-map", "0:v:0", "-an", "-sn", "-dn",
+                     "-vf", "fps=#{fps},scale=w=640:h=480:force_original_aspect_ratio=decrease,format=yuvj420p",
+                     "-q:v", "6", "-atomic_writing", "1", "-update", "1", "-y", frame_path]
+        argv + video_out
       else
         video_out = ["-map", "0:v:0", "-an", "-sn", "-dn",
-                     "-vf", "fps=#{fps},scale=w=1920:h=1080:force_original_aspect_ratio=decrease",
+                     "-vf", "fps=#{fps},scale=w=1920:h=1080:force_original_aspect_ratio=decrease,format=yuvj420p",
                      "-q:v", "4", "-atomic_writing", "1", "-update", "1", "-y", frame_path]
         if audio
           audio_out = ["-map", "0:a:0?", "-vn", "-sn", "-dn",
@@ -139,9 +140,7 @@ module VisionHub
       case input_strategy
       when :concat_file
         write_playlist(url)
-        ["-rtsp_transport", "tcp", "-timeout", FramePump::RTSP_TIMEOUT_US.to_s,
-         "-probesize", "128000", "-analyzeduration", "200000",
-         "-protocol_whitelist", "file,crypto,data,compat,tcp,rtsp,udp",
+        ["-protocol_whitelist", "file,crypto,data,compat,tcp,rtsp,rtp,udp,tls,http,https",
          "-f", "concat", "-safe", "0", "-i", playlist_path]
       when :argv
         ["-rtsp_transport", "tcp", "-timeout", FramePump::RTSP_TIMEOUT_US.to_s,
@@ -226,10 +225,6 @@ module VisionHub
       log(:info, "pid #{@pid} exited code #{exit_code} (#{intentional ? "stopped" : "died"})")
       if intentional
         finish_intentional(exit_code, now)
-      elsif role == :sub && exit_code.zero?
-        close_child
-        @status = :stopped
-        emit(event: :exited, code: exit_code, intentional: true, error: nil)
       else
         finish_crashed(exit_code, now)
       end
@@ -308,6 +303,7 @@ module VisionHub
       @started_at = nil
       @stop_deadline = nil
       @kill_deadline = nil
+      drop_stale_playlist
     end
 
     def signal(name)
@@ -350,9 +346,17 @@ module VisionHub
 
     def write_playlist(url)
       RuntimeDirectory.clean_file!(playlist_path)
-      escaped = url.gsub("'", "''")
+      target_url = append_tcp_transport(url)
+      escaped = target_url.gsub("'", "''")
       content = "ffconcat version 1.0\nfile '#{escaped}'\n"
-      File.open(playlist_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) { |f| f.write(content) }
+      flags = File::WRONLY | File::CREAT | File::TRUNC | File::NOFOLLOW
+      File.open(playlist_path, flags, 0o600) { |f| f.write(content) }
+    end
+
+    def append_tcp_transport(url)
+      return url if url.match?(/[?&]tcp\b/)
+
+      url.include?("?") ? "#{url}&tcp" : "#{url}?tcp"
     end
 
     # ---- plumbing ----

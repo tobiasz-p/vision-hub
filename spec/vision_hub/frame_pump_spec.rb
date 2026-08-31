@@ -16,7 +16,7 @@ RSpec.describe VisionHub::FramePump do
   let(:role) { :sub }
   let(:fps) { 5 }
   let(:hwaccel) { true }
-  let(:input_strategy) { :argv }
+  let(:input_strategy) { :concat_file }
   let(:secrets) { Fakes::Secrets.new("front" => "pw") }
   let(:events) { [] }
 
@@ -55,7 +55,7 @@ RSpec.describe VisionHub::FramePump do
     end
   end
 
-  def build_pump(role:, fps:, hwaccel:, input_strategy:, secrets:, audio: false)
+  def build_pump(role:, fps:, hwaccel:, secrets:, input_strategy: :concat_file, audio: false)
     described_class.new(
       camera:, role:, runtime_dir:, fps:, hwaccel:,
       audio:, input_strategy:, secrets:,
@@ -69,37 +69,55 @@ RSpec.describe VisionHub::FramePump do
 
   after { FileUtils.remove_entry(runtime_dir) if File.directory?(runtime_dir) }
 
-  describe "#build_argv (argv strategy)" do
-    it "passes the URL directly and forces TCP with a socket timeout" do
-      argv = pump.build_argv("rtsp://u:p@h/s")
+  describe "#build_argv" do
+    it "writes a 0600 playlist containing the stream URL with TCP transport" do
+      pump.build_argv("rtsp://admin:s3cret@10.0.0.5/stream2")
 
-      expect(argv[argv.index("-i") + 1]).to eq("rtsp://u:p@h/s")
-      expect(argv[argv.index("-timeout") + 1]).to eq(described_class::RTSP_TIMEOUT_US.to_s)
-      expect(argv).not_to include("-f")
+      playlist = File.join(runtime_dir, "front.sub.ffconcat")
+      expect(format("%o", File.stat(playlist).mode)).to end_with("600")
+      expect(File.read(playlist)).to include("file 'rtsp://admin:s3cret@10.0.0.5/stream2?tcp'")
     end
 
-    it "targets snapshot mode for sub role" do
+    it "points ffmpeg to the concat playlist keeping credentials out of argv" do
+      argv = pump.build_argv("rtsp://admin:s3cret@10.0.0.5/stream2")
+
+      playlist = File.join(runtime_dir, "front.sub.ffconcat")
+      expect(argv).to include(playlist)
+      expect(argv.join(" ")).not_to include("s3cret")
+      expect(argv).to include("-protocol_whitelist")
+      expect(argv[argv.index("-f") + 1]).to eq("concat")
+      expect(argv[argv.index("-safe") + 1]).to eq("0")
+    end
+
+    it "escapes single quotes in the playlist URL" do
+      pump.build_argv("rtsp://a:b'c@d/s")
+
+      expect(File.read(File.join(runtime_dir, "front.sub.ffconcat"))).to include("b''c@d/s?tcp")
+    end
+
+    it "targets continuous streaming at configured fps and 480p resolution for sub role" do
       argv = pump.build_argv("rtsp://u:p@h/s")
 
+      expected_vf = "fps=5,scale=w=640:h=480:force_original_aspect_ratio=decrease,format=yuvj420p"
       expect(argv).to end_with(File.join(runtime_dir, "front.jpg"))
-      expect(argv).to include("-frames:v", "1", "-y", "-atomic_writing", "1")
-      expect(argv[argv.index("-vf") + 1]).to eq("scale=w=640:h=480:force_original_aspect_ratio=decrease")
+      expect(argv).to include("-update", "1", "-y", "-atomic_writing", "1")
+      expect(argv[argv.index("-vf") + 1]).to eq(expected_vf)
       expect(argv).to include("-hwaccel", "auto")
     end
 
     it "targets continuous streaming for main role with configured fps and 1080p resolution" do
-      main_pump = build_pump(role: :main, fps: 20, hwaccel: true, input_strategy: :argv, secrets:)
+      main_pump = build_pump(role: :main, fps: 20, hwaccel: true, secrets:)
       argv = main_pump.build_argv("rtsp://u:p@h/s")
 
+      expected_vf = "fps=20,scale=w=1920:h=1080:force_original_aspect_ratio=decrease,format=yuvj420p"
       expect(argv).to end_with(File.join(runtime_dir, "front.jpg"))
       expect(argv).to include("-update", "1", "-atomic_writing", "1", "-y")
-      expect(argv[argv.index("-vf") + 1]).to eq("fps=20,scale=w=1920:h=1080:force_original_aspect_ratio=decrease")
+      expect(argv[argv.index("-vf") + 1]).to eq(expected_vf)
       expect(argv).to include("-hwaccel", "auto")
     end
 
     it "includes pulse audio output when audio is enabled" do
-      main_pump = build_pump(role: :main, fps: 15, hwaccel: true, input_strategy: :argv,
-                             audio: true, secrets:)
+      main_pump = build_pump(role: :main, fps: 15, hwaccel: true, audio: true, secrets:)
       argv = main_pump.build_argv("rtsp://u:p@h/s")
 
       expect(argv).to include("-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", "-f", "pulse", "VisionHub")
@@ -113,24 +131,15 @@ RSpec.describe VisionHub::FramePump do
       end
     end
 
-    context "with the concat_file strategy" do
-      let(:input_strategy) { :concat_file }
+    context "with legacy argv strategy" do
+      let(:input_strategy) { :argv }
 
-      it "writes a 0600 playlist and keeps the credential out of argv" do
-        argv = pump.build_argv("rtsp://admin:s3cret@10.0.0.5/stream2")
+      it "passes the URL directly and forces TCP with a socket timeout" do
+        argv = pump.build_argv("rtsp://u:p@h/s")
 
-        playlist = File.join(runtime_dir, "front.sub.ffconcat")
-        expect(argv).to include(playlist)
-        expect(argv.join(" ")).not_to include("s3cret")
-        expect(argv).to include("-protocol_whitelist")
-        expect(format("%o", File.stat(playlist).mode)).to end_with("600")
-        expect(File.read(playlist)).to include("file 'rtsp://admin:s3cret@10.0.0.5/stream2'")
-      end
-
-      it "escapes single quotes in the URL" do
-        pump.build_argv("rtsp://a:b'c@d/s")
-
-        expect(File.read(File.join(runtime_dir, "front.sub.ffconcat"))).to include("b''c")
+        expect(argv[argv.index("-i") + 1]).to eq("rtsp://u:p@h/s")
+        expect(argv[argv.index("-timeout") + 1]).to eq(described_class::RTSP_TIMEOUT_US.to_s)
+        expect(argv).not_to include("-f")
       end
     end
   end
@@ -156,13 +165,13 @@ RSpec.describe VisionHub::FramePump do
     end
 
     it "uses the mainstream URL for the main role" do
-      main_pump = build_pump(role: :main, fps: 10, hwaccel: true, input_strategy: :argv,
+      main_pump = build_pump(role: :main, fps: 10, hwaccel: true,
                              secrets: Fakes::Secrets.new("front" => "pw"))
       main_pump.start(now: 100)
 
-      url = spawned[0][spawned[0].index("-i") + 1]
-      expect(url).to end_with("/stream1")
-      expect(url).to include("admin:pw@")
+      playlist = File.join(runtime_dir, "front.main.ffconcat")
+      expect(File.read(playlist)).to end_with("/stream1?tcp'\n")
+      expect(File.read(playlist)).to include("admin:pw@")
     end
 
     it "stops gracefully: TERM then confirmation via the reaper" do
@@ -206,6 +215,18 @@ RSpec.describe VisionHub::FramePump do
       exits[pid] = 9
       pump.tick(now: 100.8)
       expect(pump.status).to eq(:stopped)
+    end
+
+    it "cleans up playlist when child stops" do
+      pump.start(now: 100)
+      playlist = File.join(runtime_dir, "front.sub.ffconcat")
+      expect(File.exist?(playlist)).to be(true)
+
+      pump.stop(now: 100)
+      exits[pid_counter[0]] = 0
+      pump.tick(now: 101)
+
+      expect(File.exist?(playlist)).to be(false)
     end
   end
 
@@ -263,7 +284,7 @@ RSpec.describe VisionHub::FramePump do
       spawner_with_secret = make_spawner(err_msg)
       pump_with_stderr = described_class.new(
         camera:, role: :sub, runtime_dir:, fps: 5, hwaccel: true,
-        input_strategy: :argv, secrets:, spawner: spawner_with_secret,
+        secrets:, spawner: spawner_with_secret,
         reaper:, killer:
       )
 
@@ -276,12 +297,12 @@ RSpec.describe VisionHub::FramePump do
       expect(pump_with_stderr.last_error).not_to include("supersecret")
     end
 
-    it "defaults to argv input strategy" do
+    it "defaults to concat_file input strategy" do
       default_pump = described_class.new(
         camera:, role: :sub, runtime_dir:, fps: 5, hwaccel: true,
         secrets:, spawner:, reaper:, killer:
       )
-      expect(default_pump.input_strategy).to eq(:argv)
+      expect(default_pump.input_strategy).to eq(:concat_file)
     end
 
     it "emits exited events tagged with camera and role" do
@@ -313,7 +334,7 @@ RSpec.describe VisionHub::FramePump do
 
     it "starts spawning as soon as the keyring entry exists" do
       store = Fakes::Secrets.new("front" => nil)
-      pump = build_pump(role: :sub, fps: 5, hwaccel: true, input_strategy: :argv, secrets: store)
+      pump = build_pump(role: :sub, fps: 5, hwaccel: true, secrets: store)
 
       pump.start(now: 0)
       store.reveal!("front", "late")
@@ -335,7 +356,8 @@ RSpec.describe VisionHub::FramePump do
       pump.start(now: 0)
 
       expect(spawned.size).to eq(1)
-      expect(spawned[0].join(" ")).to include("rtsp://10.0.0.9:554/stream2")
+      playlist = File.join(runtime_dir, "anon.sub.ffconcat")
+      expect(File.read(playlist)).to include("rtsp://10.0.0.9:554/stream2?tcp")
     end
   end
 end
