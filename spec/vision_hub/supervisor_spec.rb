@@ -6,7 +6,7 @@ RSpec.describe VisionHub::Supervisor do
   subject(:supervisor) do
     described_class.new(
       cameras:, runtime_dir: "/run/vision-hub", secrets:,
-      fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
+      fps: 5, main_fps: 15, hwaccel: true,
       probe_interval:, logger: nil,
       build_pump:, probe_runner:
     )
@@ -74,7 +74,7 @@ RSpec.describe VisionHub::Supervisor do
     it "reports unconfigured cameras through the state stream" do
       bare = described_class.new(
         cameras: [cameras[0]], runtime_dir: "/run/vision-hub", secrets: Fakes::Secrets.new,
-        fps: 5, main_fps: 15, hwaccel: true, input_strategy: :argv,
+        fps: 5, main_fps: 15, hwaccel: true,
         build_pump: ->(kw) { Fakes::Pump.new(kw).tap { |p| p.start_mode = :unconfigured } },
         probe_runner:
       )

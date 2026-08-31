@@ -22,7 +22,7 @@ options = {
   main_fps: 15,
   quality: "hd",
   hwaccel: true,
-  input_strategy: :argv,
+  input_strategy: :concat_file,
   probe_interval: VisionHub::Supervisor::DEFAULT_PROBE_INTERVAL
 }
 parser = OptionParser.new do |opts|
@@ -33,7 +33,7 @@ parser = OptionParser.new do |opts|
   opts.on("--main-fps N", Integer, "focused-stream target fps") { |v| options[:main_fps] = v }
   opts.on("--quality PRESET", String, "focused-stream quality (eco, hd, ultra, max)") { |v| options[:quality] = v }
   opts.on("--no-hwaccel", "disable hardware decode") { options[:hwaccel] = false }
-  opts.on("--input STRATEGY", %w[argv concat_file], "credential delivery strategy") do |v|
+  opts.on("--input STRATEGY", %w[concat_file argv], "credential delivery strategy (default: concat_file)") do |v|
     options[:input_strategy] = v.to_sym
   end
 end

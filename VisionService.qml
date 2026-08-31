@@ -42,7 +42,7 @@ Item {
   property int subFps: 5
   property int mainFps: 15
   property bool hwaccel: true
-  property string inputStrategy: "argv"
+  property string inputStrategy: "concat_file"
   readonly property string argSignature:
     subFps + "/" + mainFps + "/" + hwaccel + "/" + inputStrategy
 
@@ -143,7 +143,7 @@ Item {
       "--fps", String(root.subFps),
       "--main-fps", String(root.mainFps)]
     if (!root.hwaccel) argv.push("--no-hwaccel")
-    if (root.inputStrategy !== "argv") argv.push("--input", root.inputStrategy)
+    if (root.inputStrategy !== "concat_file") argv.push("--input", root.inputStrategy)
     return argv
   }
 
