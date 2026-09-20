@@ -123,6 +123,7 @@ Item {
   // ---- window -----------------------------------------------------------------
   FloatingWindow {
     id: window
+    visible: false
 
     readonly property var focusedState: root.visionService ? root.visionService.stateFor(root.focusedId) : null
     title: "VisionHub" + (root.focusedId !== "" ? " — " + (focusedState && focusedState.name ? focusedState.name : root.focusedId) : "")
