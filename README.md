@@ -49,7 +49,14 @@ High-framerate focused stream with interactive FPS switcher, live RTSP audio pla
 
 ## Installation & Removal
 
-Enable the plugin:
+### Install
+
+Install and enable the plugin directly from git:
+```bash
+omarchy plugin add https://github.com/tobiasz-p/vision-hub.git --enable
+```
+
+Or clone manually into `~/.config/omarchy/plugins/tobiasz-p.vision-hub` and enable:
 ```bash
 omarchy plugin enable tobiasz-p.vision-hub
 ```
@@ -58,6 +65,8 @@ Or place it in a specific bar position:
 ```bash
 omarchy bar put tobiasz-p.vision-hub --section right
 ```
+
+### Disable & Remove
 
 Disable the plugin:
 ```bash
